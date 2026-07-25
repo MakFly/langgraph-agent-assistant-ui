@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.ruff_cache/
+
+# JS
+node_modules/
+dist/
+*.tsbuildinfo
+
+# Secrets
+.env
+.env.local
+
+# Débris de session : jamais versionnés
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.webp
+.playwright-mcp/
+.playwright-cli/
+
+# Mot de passe de infra-postgres (stack dev-infra), lu par docker-compose
+.env
+
+# Surcharge compose locale : branche le projet sur la stack dev-infra au lieu
+# du Postgres embarqué. Propre à une machine, jamais partagée.
+docker-compose.override.yml

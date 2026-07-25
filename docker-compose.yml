@@ -1,0 +1,63 @@
+# Nom du projet compose — conservé tel quel pour ne pas orpheliner les volumes
+# existants (le dépôt GitHub, lui, s'appelle langgraph-agent-assistant-ui).
+name: langgraph-poc
+
+services:
+  api:
+    build: ./apps/api
+    ports:
+      - "4310:4310"
+    env_file:
+      - ./apps/api/.env
+    environment:
+      # Postgres embarqué : le dépôt doit démarrer sur une machine vierge.
+      DATABASE_URL: postgresql://agent:${POSTGRES_PASSWORD:-agent}@db:5432/langgraph_poc
+    volumes:
+      # Hot reload : uvicorn --reload surveille /app/src.
+      - ./apps/api/src:/app/src
+      - ./apps/api/tests:/app/tests
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://localhost:4310/api/health')"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+
+  web:
+    build: ./apps/web
+    ports:
+      - "4311:4311"
+    environment:
+      # Le proxy Vite vise le service api par son hostname sur le réseau.
+      VITE_API_TARGET: http://api:4310
+    volumes:
+      - ./apps/web:/app
+      # node_modules reste celui de l'image : sans ce volume nommé, le bind mount
+      # ci-dessus le masquerait et Vite ne démarrerait pas.
+      - web_node_modules:/app/node_modules
+    depends_on:
+      api:
+        condition: service_started
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: agent
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-agent}
+      POSTGRES_DB: langgraph_poc
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    # Aucun port publié : seule l'API l'atteint, par le réseau du projet.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U agent -d langgraph_poc"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+
+volumes:
+  web_node_modules:
+  db_data:
