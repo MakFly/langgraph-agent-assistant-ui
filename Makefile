@@ -51,11 +51,14 @@ restart: ## Redémarre la stack
 # --- Qualité -----------------------------------------------------------------
 # Tout tourne dans le conteneur : aucun outil Python n'est requis sur l'hôte.
 
+# Pas de --no-deps ici : les tests d'historisation et de configuration ont besoin
+# de la base. Sans elle ils se contentent de skipper — 63 tests au lieu de 89.
+
 test: ## Tous les tests de l'API (réseau requis : les outils tapent leurs vraies APIs)
-	$(COMPOSE) run --rm --no-deps api pytest -v
+	$(COMPOSE) run --rm api pytest -v
 
 test-unit: ## Tests hors réseau uniquement (graphe, conversion, calculateur)
-	$(COMPOSE) run --rm --no-deps api pytest -v --deselect tests/test_tools.py::TestApisExternes
+	$(COMPOSE) run --rm api pytest -v --deselect tests/test_tools.py::TestApisExternes
 
 lint: ## Ruff sur l'API
 	$(COMPOSE) run --rm --no-deps api ruff check src tests
