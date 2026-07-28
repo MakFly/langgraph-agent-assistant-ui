@@ -16,16 +16,30 @@ import json
 import uuid
 from typing import Any, Literal
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, ValidationError, model_validator
 
+from agent.api.auth import current_user, require_admin
 from agent.core import settings
 from agent.core.model import EffortLevel, Provider
 from agent.core.settings import state
 from agent.core.tools import TOOLS
 from agent.infra import db
 
-router = APIRouter(prefix="/api/settings", tags=["settings"])
+# Lecture réservée aux comptes authentifiés (la sidebar en a besoin), écriture
+# réservée aux administrateurs : ces réglages sont GLOBAUX. Sans cette barrière,
+# n'importe quel utilisateur réécrit le prompt système de tout le monde — et le
+# prompt système est l'endroit exact où l'on ferait dire à l'agent d'ignorer ses
+# règles de citation.
+#
+# Le garde-fou est déclaré route par route plutôt qu'une fois pour toutes : une
+# nouvelle route de mutation sans `require_admin` se voit alors à la relecture,
+# au lieu d'hériter silencieusement du bon comportement... ou du mauvais.
+router = APIRouter(
+    prefix="/api/settings", tags=["settings"], dependencies=[Depends(current_user)]
+)
+
+_ADMIN = [Depends(require_admin)]
 
 Transport = Literal["stdio", "http", "sse"]
 
@@ -41,6 +55,13 @@ class AgentPatch(BaseModel):
     system_prompt: str | None = None
     max_tool_loops: int | None = Field(default=None, ge=1, le=20)
     temperature: float | None = Field(default=None, ge=0.0, le=2.0)
+    # Bornes reprises du domaine : les répéter en dur ici les ferait diverger au
+    # premier changement.
+    max_context_tokens: int | None = Field(
+        default=None,
+        ge=settings.MAX_CONTEXT_TOKENS_RANGE[0],
+        le=settings.MAX_CONTEXT_TOKENS_RANGE[1],
+    )
 
 
 class ModelPatch(BaseModel):
@@ -109,7 +130,7 @@ async def get_settings() -> dict[str, Any]:
     return await state()
 
 
-@router.patch("/agent")
+@router.patch("/agent", dependencies=_ADMIN)
 async def patch_agent(payload: AgentPatch) -> dict[str, Any]:
     await _require_db()
     updates = payload.model_dump(exclude_unset=True)
@@ -122,7 +143,7 @@ async def patch_agent(payload: AgentPatch) -> dict[str, Any]:
     return await state()
 
 
-@router.patch("/model")
+@router.patch("/model", dependencies=_ADMIN)
 async def patch_model(payload: ModelPatch) -> dict[str, Any]:
     await _require_db()
     updates = payload.model_dump(exclude_unset=True)
@@ -134,7 +155,7 @@ async def patch_model(payload: ModelPatch) -> dict[str, Any]:
     return await state()
 
 
-@router.patch("/tools/{name}")
+@router.patch("/tools/{name}", dependencies=_ADMIN)
 async def patch_tool(name: str, payload: ToolPatch) -> dict[str, Any]:
     await _require_db()
     if name not in {tool.name for tool in TOOLS}:
@@ -149,7 +170,7 @@ async def list_mcp_servers() -> list[dict[str, Any]]:
     return await settings.list_mcp()
 
 
-@router.post("/mcp")
+@router.post("/mcp", dependencies=_ADMIN)
 async def create_mcp_server(payload: McpServerCreate) -> dict[str, Any]:
     await _require_db()
     row = await db.pool().fetchrow(
@@ -174,7 +195,7 @@ async def create_mcp_server(payload: McpServerCreate) -> dict[str, Any]:
     return settings.mcp_json(dict(row))
 
 
-@router.patch("/mcp/{server_id}")
+@router.patch("/mcp/{server_id}", dependencies=_ADMIN)
 async def patch_mcp_server(server_id: str, payload: McpServerPatch) -> dict[str, Any]:
     await _require_db()
     existing = await db.pool().fetchrow(
@@ -221,7 +242,7 @@ async def patch_mcp_server(server_id: str, payload: McpServerPatch) -> dict[str,
     return settings.mcp_json(dict(row))
 
 
-@router.delete("/mcp/{server_id}")
+@router.delete("/mcp/{server_id}", dependencies=_ADMIN)
 async def delete_mcp_server(server_id: str) -> dict[str, str]:
     await _require_db()
     result = await db.pool().execute("DELETE FROM mcp_servers WHERE id = $1", server_id)

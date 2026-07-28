@@ -15,11 +15,12 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from agent.api.auth import router as auth_router
 from agent.api.chat import router as chat_router
 from agent.api.settings import router as settings_router
 from agent.api.threads import router as threads_router
-from agent.core import settings
-from agent.infra import db
+from agent.core import settings, users
+from agent.infra import db, ragdb
 from agent.infra.log import setup_logging
 
 logger = logging.getLogger("agent.main")
@@ -37,6 +38,21 @@ async def lifespan(_: FastAPI):
         await db.connect()
     except Exception:
         logger.warning("historisation désactivée : base injoignable", exc_info=True)
+    else:
+        # Sans base, aucune connexion n'est possible — mais un jeton déjà émis
+        # reste valable, puisqu'il se vérifie sans SQL (agent.infra.auth).
+        try:
+            await users.bootstrap_admin()
+        except Exception:
+            logger.warning("amorçage du compte administrateur en échec", exc_info=True)
+
+    # Index documentaire : facultatif comme le reste. Sans lui, l'outil de
+    # recherche documentaire se déclare indisponible et l'agent continue avec ses
+    # autres outils, au lieu de refuser de démarrer.
+    try:
+        await ragdb.connect()
+    except Exception:
+        logger.warning("recherche documentaire désactivée : index injoignable", exc_info=True)
 
     # Un seul chargement de la config au démarrage : ensuite le graphe lit le
     # snapshot en mémoire, et chaque mutation le republie (agent.core.settings).
@@ -53,6 +69,7 @@ async def lifespan(_: FastAPI):
 
     yield
     await db.disconnect()
+    await ragdb.disconnect()
 
 
 app = FastAPI(title="LangGraph POC", version="0.1.0", lifespan=lifespan)
@@ -65,10 +82,15 @@ app.add_middleware(
         origin.strip()
         for origin in os.getenv("CORS_ORIGIN", "http://localhost:4311").split(",")
     ],
+    # Le jeton voyage en cookie : sans `allow_credentials`, un front servi depuis
+    # une autre origine serait authentifié en local et anonyme en CORS.
+    # La liste d'origines est explicite (jamais `*`), ce que cette option impose.
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+app.include_router(auth_router)
 app.include_router(chat_router)
 app.include_router(threads_router)
 app.include_router(settings_router)

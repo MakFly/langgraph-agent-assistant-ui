@@ -9,7 +9,9 @@ WEB_PORT ?= $(or $(shell sed -n 's/.*"\([0-9]*\):4311".*/\1/p' docker-compose.ym
 COMPOSE := docker compose
 
 .DEFAULT_GOAL := help
-.PHONY: help install up dev down stop restart logs logs-api logs-web test test-unit lint typecheck build check shell-api shell-web clean
+.PHONY: help install up dev down stop restart logs logs-api logs-web test test-unit lint typecheck build check shell-api shell-web clean \
+        user-create user-list user-groups user-password user-role user-disable user-delete \
+        seed demo ingest ingest-dry rag-stats rag-reset eval
 
 help: ## Affiche cette aide
 	@grep -hE '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -70,6 +72,61 @@ build: ## Build de production du front
 	cd apps/web && bun run build
 
 check: test lint typecheck build ## Enchaîne tests, lint, types et build
+
+# --- Comptes (RBAC natif) -----------------------------------------------------
+# Le mot de passe n'est jamais un argument de make : il serait lisible dans `ps`
+# et dans l'historique du shell. Il est demandé en saisie masquée, ou lu sur
+# l'entrée standard (`echo "..." | make user-create EMAIL=...`).
+
+user-create: ## Crée un compte — EMAIL=… [ROLE=admin|member] [GROUPS=a,b] [NAME=…]
+	$(COMPOSE) run --rm -T api python -m agent.cli user create \
+		--email "$(EMAIL)" --role "$(or $(ROLE),member)" \
+		--groups "$(GROUPS)" --name "$(NAME)"
+
+user-list: ## Liste les comptes, leur rôle et leurs groupes
+	$(COMPOSE) run --rm --no-deps api python -m agent.cli user list
+
+user-groups: ## Remplace les groupes d'un compte — EMAIL=… GROUPS=a,b
+	$(COMPOSE) run --rm --no-deps api python -m agent.cli user groups \
+		--email "$(EMAIL)" --groups "$(GROUPS)"
+
+user-password: ## Change le mot de passe — EMAIL=…
+	$(COMPOSE) run --rm -T api python -m agent.cli user password --email "$(EMAIL)"
+
+user-role: ## Change le rôle — EMAIL=… ROLE=admin|member
+	$(COMPOSE) run --rm --no-deps api python -m agent.cli user role \
+		--email "$(EMAIL)" --role "$(ROLE)"
+
+user-disable: ## Désactive un compte — EMAIL=…
+	$(COMPOSE) run --rm --no-deps api python -m agent.cli user disable --email "$(EMAIL)"
+
+user-delete: ## Supprime un compte et ses conversations — EMAIL=…
+	$(COMPOSE) run --rm --no-deps api python -m agent.cli user delete --email "$(EMAIL)"
+
+seed: ## Crée 4 comptes de démonstration (DEV — mot de passe public, idempotent)
+	$(COMPOSE) run --rm api python -m agent.cli seed
+
+demo: seed ingest ## Prépare la démo complète : comptes + corpus indexé
+	@echo "→ ouvrez http://localhost:$(WEB_PORT)/ : les comptes sont proposés en un clic"
+
+# --- RAG ----------------------------------------------------------------------
+# Les permissions viennent de l'arborescence : corpus/<groupe>/fichier.md
+# Un fichier posé à la racine de corpus/ devient lisible par TOUT LE MONDE.
+
+ingest: ## Indexe corpus/ dans l'index vectoriel (idempotent)
+	$(COMPOSE) run --rm api python -m agent.cli ingest
+
+ingest-dry: ## Montre ce que `make ingest` ferait, sans rien vectoriser ni payer
+	$(COMPOSE) run --rm api python -m agent.cli ingest --dry-run
+
+rag-stats: ## Documents et fragments indexés, par groupe
+	$(COMPOSE) run --rm api python -m agent.cli rag stats
+
+rag-reset: ## Vide l'index documentaire (les conversations ne bougent pas)
+	$(COMPOSE) run --rm api python -m agent.cli rag reset
+
+eval: ## Mesure le RAG : rappel@k, MRR et contrôle de fuite d'ACL
+	$(COMPOSE) run --rm api python -m agent.cli rag eval
 
 # --- Divers ------------------------------------------------------------------
 

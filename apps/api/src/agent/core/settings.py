@@ -58,15 +58,30 @@ DEFAULT_MAX_TOOL_LOOPS = 5
 MAX_TOOL_LOOPS_RANGE = (1, 20)
 TEMPERATURE_RANGE = (0.0, 2.0)
 
-# Fenêtre de contexte envoyée au modèle. Le client renvoie **tout** l'historique à chaque
-# tour : sans plafond, le coût d'une conversation croît en O(N²) et on finit sur un
-# `context_length_exceeded`. 24 000 tokens tient dans le plus petit modèle du catalogue
-# (`qwen3:8b`, 32k) en laissant la place à la réponse et aux résultats d'outils.
+# Fenêtre de contexte envoyée au modèle, **valeur par défaut**. Le client renvoie tout
+# l'historique à chaque tour : sans plafond, le coût d'une conversation croît en O(N²) et
+# on finit sur un `context_length_exceeded`. 24 000 tokens tient dans le plus petit modèle
+# du catalogue (`qwen3:8b`, 32k) en laissant la place à la réponse et aux résultats
+# d'outils.
 #
-# La valeur vit ici, comme `DEFAULT_MAX_TOOL_LOOPS` : c'est d'abord une limite de
-# configuration que le graphe *lit* (`graph.MAX_CONTEXT_TOKENS`), et la placer dans
-# `graph.py` créerait un cycle d'import avec ce module.
-MAX_CONTEXT_TOKENS = 24_000
+# C'est désormais un **défaut**, plus une constante : les fenêtres vont de 32 k à
+# beaucoup plus selon le modèle, et un plafond unique dimensionné sur le plus petit
+# gaspille le contexte de tous les autres. La valeur est donc réglable
+# (`AgentConfig.max_context_tokens`).
+#
+# Pourquoi un réglage plutôt qu'un catalogue « fenêtre par modèle » : ce catalogue
+# existerait à côté de `PROVIDER_MODELS`, qui est déjà le point de rot connu du projet.
+# L'opérateur, lui, connaît le modèle qu'il a choisi.
+DEFAULT_MAX_CONTEXT_TOKENS = 24_000
+
+# Plancher : en dessous, l'historique est rogné si vite que la conversation perd le fil.
+# Plafond : borne de garde-fou, pas une limite technique — au-delà, c'est le provider
+# qui refusera, et son message sera plus juste que le nôtre.
+MAX_CONTEXT_TOKENS_RANGE = (2_000, 1_000_000)
+
+# Conservé pour compatibilité : plusieurs modules et tests importent ce nom comme
+# « la fenêtre par défaut ».
+MAX_CONTEXT_TOKENS = DEFAULT_MAX_CONTEXT_TOKENS
 
 
 # --- Modèles de configuration -------------------------------------------------
@@ -78,6 +93,13 @@ class AgentConfig(BaseModel):
     system_prompt: str | None = None
     max_tool_loops: int = Field(default=DEFAULT_MAX_TOOL_LOOPS, ge=1, le=20)
     temperature: float = Field(default=0.0, ge=0.0, le=2.0)
+    # Au-delà, l'historique le plus ancien n'est plus envoyé au modèle. À régler sur
+    # la fenêtre du modèle actif, moins la place voulue pour la réponse.
+    max_context_tokens: int = Field(
+        default=DEFAULT_MAX_CONTEXT_TOKENS,
+        ge=MAX_CONTEXT_TOKENS_RANGE[0],
+        le=MAX_CONTEXT_TOKENS_RANGE[1],
+    )
 
 
 class ModelConfig(BaseModel):
@@ -291,10 +313,12 @@ async def state() -> dict[str, Any]:
             **config.agent.model_dump(),
             "max_tool_loops_range": list(MAX_TOOL_LOOPS_RANGE),
             "temperature_range": list(TEMPERATURE_RANGE),
-            # Même logique que les bornes ci-dessus : le front doit pouvoir afficher
-            # exactement la limite que le serveur applique (ici, la fenêtre au-delà de
-            # laquelle l'historique est rogné — cf. graph.MAX_CONTEXT_TOKENS).
-            "context_window_tokens": MAX_CONTEXT_TOKENS,
+            "max_context_tokens_range": list(MAX_CONTEXT_TOKENS_RANGE),
+            # Alias historique de `max_context_tokens`, conservé parce que la jauge de
+            # contexte du composer le lit sous ce nom. Il vaut désormais la valeur
+            # CONFIGURÉE, plus une constante : sinon la jauge afficherait un plafond
+            # que le serveur n'applique plus.
+            "context_window_tokens": config.agent.max_context_tokens,
         },
         "model": {
             **config.model.model_dump(),

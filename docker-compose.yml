@@ -12,12 +12,21 @@ services:
     environment:
       # Postgres embarqué : le dépôt doit démarrer sur une machine vierge.
       DATABASE_URL: postgresql://agent:${POSTGRES_PASSWORD:-agent}@db:5432/langgraph_poc
+      # Base du RAG, séparée : elle seule porte l'extension pgvector, et on peut
+      # la vider pour tout réindexer sans toucher aux conversations.
+      RAG_DATABASE_URL: postgresql://rag:${RAG_PASSWORD:-rag}@ragdb:5432/rag
     volumes:
       # Hot reload : uvicorn --reload surveille /app/src.
       - ./apps/api/src:/app/src
       - ./apps/api/tests:/app/tests
+      # Corpus à indexer, en lecture seule : `make ingest` lit, n'écrit jamais.
+      - ./corpus:/app/corpus:ro
+      # Jeu d'évaluation, lu par `make eval`.
+      - ./eval:/app/eval:ro
     depends_on:
       db:
+        condition: service_healthy
+      ragdb:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://localhost:4310/api/health')"]
@@ -58,6 +67,28 @@ services:
       retries: 10
       start_period: 5s
 
+  ragdb:
+    # Base du RAG. Conteneur propre au projet et NON mutualisé, à dessein :
+    # `infra-postgres` (postgres:16-alpine) ne propose pas l'extension `vector`,
+    # et changer l'image d'un service partagé par plusieurs projets pour les
+    # besoins de celui-ci reviendrait à leur imposer un redémarrage.
+    # C'est le même arbitrage que `castings-cfresolv`.
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: rag
+      POSTGRES_PASSWORD: ${RAG_PASSWORD:-rag}
+      POSTGRES_DB: rag
+    volumes:
+      - rag_data:/var/lib/postgresql/data
+    # Aucun port publié : seule l'API l'atteint, par le réseau du projet.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rag -d rag"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+
 volumes:
   web_node_modules:
   db_data:
+  rag_data:

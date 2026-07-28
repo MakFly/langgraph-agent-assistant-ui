@@ -1,16 +1,28 @@
-"""Tous les outils sont gratuits et sans clé : aucun compte, aucun quota à surveiller."""
+"""Les quatre outils publics sont gratuits et sans clé : aucun compte, aucun quota.
+
+`document_search` est d'une autre nature : il lit le corpus interne, donc des
+données privées, et il est le seul à recevoir l'identité de l'appelant pour
+filtrer ce qu'il a le droit de rendre (cf. `agent.core.tools.rag`).
+"""
 
 import json
 import logging
 
 from agent.core.tools.calculator import calculator
 from agent.core.tools.hackernews import hacker_news_search
+from agent.core.tools.rag import document_search
 from agent.core.tools.weather import weather_forecast
 from agent.core.tools.wikipedia import wikipedia_search
 
 logger = logging.getLogger("agent.tools")
 
-TOOLS = [wikipedia_search, hacker_news_search, weather_forecast, calculator]
+TOOLS = [
+    wikipedia_search,
+    hacker_news_search,
+    weather_forecast,
+    calculator,
+    document_search,
+]
 
 
 def tool_error_message(error: Exception) -> str:
@@ -29,6 +41,7 @@ def tool_error_message(error: Exception) -> str:
 __all__ = [
     "TOOLS",
     "calculator",
+    "document_search",
     "hacker_news_search",
     "tool_error_message",
     "weather_forecast",

@@ -85,6 +85,7 @@ class FakeToolCallingModel(BaseChatModel):
                         ],
                     )
                 )
+            yield from self._usage_chunk(message)
             return
 
         # Découpage qui préserve les espaces : la concaténation des chunks
@@ -92,3 +93,20 @@ class FakeToolCallingModel(BaseChatModel):
         text = message.content if isinstance(message.content, str) else ""
         for piece in re.findall(r"\S+\s*", text):
             yield ChatGenerationChunk(message=AIMessageChunk(content=piece))
+
+        yield from self._usage_chunk(message)
+
+    @staticmethod
+    def _usage_chunk(message: BaseMessage) -> Iterator[ChatGenerationChunk]:
+        """Dernier fragment, porteur de la consommation — comme un vrai provider.
+
+        Les providers rapportent les tokens **à la fin** du flux, dans un chunk
+        sans contenu. Reproduire ce détail est nécessaire : sans lui, la partie
+        `message-metadata` du protocole n'a rien à transporter et le test
+        vérifierait un chemin qui n'existe pas en production.
+        """
+        usage = getattr(message, "usage_metadata", None)
+        if usage:
+            yield ChatGenerationChunk(
+                message=AIMessageChunk(content="", usage_metadata=usage)
+            )

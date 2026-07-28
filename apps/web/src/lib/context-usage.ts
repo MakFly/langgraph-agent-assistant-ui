@@ -1,19 +1,26 @@
 import type { ThreadMessage } from "@assistant-ui/react";
 
 /**
- * Estimation du contexte consommé par une conversation.
+ * Estimation du contexte consommé — **le plan B**.
+ *
+ * La mesure exacte vient du provider (`usage_metadata`), transmise par le backend
+ * en `message-metadata` et lue par `useThreadTokenUsage()`. Ce module ne sert que
+ * tant qu'aucune mesure n'existe : avant la première réponse de l'assistant, ou
+ * avec un provider qui ne rapporte pas ses tokens en streaming.
  *
  * **Copie volontaire** de la formule de `count_tokens_approximately`
  * (langchain-core), celle-là même qui décide du rognage côté serveur
- * (`agent.settings.MAX_CONTEXT_TOKENS`) : afficher un pourcentage calculé autrement
- * donnerait un chiffre qui ne correspond à rien de ce que le serveur applique.
+ * (`agent.settings.MAX_CONTEXT_TOKENS`) : estimer autrement donnerait un chiffre
+ * qui ne correspond à rien de ce que le serveur applique.
  *
  *     par message : ceil(caractères / 4) + 3
  *     caractères  : texte + rôle + arguments et résultats d'outils
  *
- * Reste une **estimation** : le serveur compte des messages LangChain reconstruits par
- * `to_lc_messages()`, pas les parts de l'UI, et un tokenizer réel diverge de « 4
- * caractères par token ». Assez juste pour une jauge, jamais pour une facturation.
+ * Trois angles morts connus, tous dans le même sens — l'estimation **sous-évalue**
+ * toujours : le prompt système n'est pas compté (le serveur le rogne hors fenêtre
+ * puis l'ajoute à l'appel), les schémas d'outils envoyés par `bind_tools()` non
+ * plus, et les images valent zéro. C'est précisément ce que la mesure du provider
+ * corrige.
  */
 
 const CHARS_PER_TOKEN = 4;
@@ -46,23 +53,14 @@ export function estimateTokens(messages: readonly ThreadMessage[]): number {
   }, 0);
 }
 
-export type ContextUsage = {
-  used: number;
-  budget: number;
-  /** 100 = rien de consommé, 0 = les plus anciens messages sont rognés. */
-  remainingPercent: number;
-};
-
-export function contextUsage(
-  messages: readonly ThreadMessage[],
-  budget: number,
-): ContextUsage {
-  const used = estimateTokens(messages);
-  // `budget` vient de l'API ; on se protège d'un 0 qui produirait un NaN à l'affichage.
+/**
+ * Part de fenêtre restante, en pourcentage entier.
+ *
+ * 100 = rien de consommé, 0 = les plus anciens messages sont rognés côté serveur.
+ * Séparé du décompte pour servir indifféremment une valeur mesurée ou estimée.
+ */
+export function remainingPercent(used: number, budget: number): number {
+  // `budget` vient de l'API ; on se protège d'un 0 qui produirait un NaN.
   const remaining = budget > 0 ? 1 - used / budget : 1;
-  return {
-    used,
-    budget,
-    remainingPercent: Math.max(0, Math.min(100, Math.round(remaining * 100))),
-  };
+  return Math.max(0, Math.min(100, Math.round(remaining * 100)));
 }

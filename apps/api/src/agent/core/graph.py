@@ -97,7 +97,12 @@ def system_prompt(override: str | None = None) -> SystemMessage:
                 "de météo ou d'un calcul.",
                 "- Ne calcule jamais de tête : passe par `calculator`.",
                 "- Tu peux enchaîner plusieurs outils avant de répondre.",
-                "- Cite tes sources (titre + URL) quand elles viennent d'un outil.",
+                "- Pour toute question sur les procédures, règles ou documents internes, "
+                "utilise `document_search` avant de répondre.",
+                "- Cite tes sources (titre + URL) quand elles viennent d'un outil, "
+                "et la référence `source#fragment` pour les documents internes.",
+                "- Si `document_search` ne rend rien, dis que tu n'as trouvé aucun "
+                "document accessible — n'affirme jamais qu'il n'en existe pas.",
                 "- Si un outil renvoie une erreur, explique-le au lieu d'inventer.",
                 "- Réponds en français, en markdown, de façon concise.",
             ]
@@ -105,8 +110,20 @@ def system_prompt(override: str | None = None) -> SystemMessage:
     )
 
 
-def _windowed(messages: list[BaseMessage]) -> list[BaseMessage]:
-    """Les derniers messages qui tiennent dans `MAX_CONTEXT_TOKENS`.
+def _windowed(
+    messages: list[BaseMessage], max_tokens: int = MAX_CONTEXT_TOKENS
+) -> list[BaseMessage]:
+    """Les derniers messages qui tiennent dans `max_tokens`.
+
+    Le plafond est un argument, plus une constante : il est réglable par domaine de
+    configuration (`AgentConfig.max_context_tokens`) parce que les fenêtres varient
+    d'un modèle à l'autre dans un rapport de un à trente. Le défaut reste la valeur
+    prudente, dimensionnée sur le plus petit modèle du catalogue.
+
+    Rappel utile : ce plafond ne couvre **que l'historique**. Le prompt système et
+    les schémas d'outils s'y ajoutent (environ 670 tokens réels dans la
+    configuration par défaut, mesuré), et c'est pour ça qu'il faut laisser une marge
+    entre cette valeur et la fenêtre réelle du modèle.
 
     `start_on="human"` n'est pas cosmétique : une fenêtre qui commencerait par un
     `ToolMessage` orphelin (son `AIMessage` avec les `tool_call_id` étant tombé hors
@@ -115,7 +132,7 @@ def _windowed(messages: list[BaseMessage]) -> list[BaseMessage]:
     """
     windowed = trim_messages(
         messages,
-        max_tokens=MAX_CONTEXT_TOKENS,
+        max_tokens=max_tokens,
         token_counter=count_tokens_approximately,
         strategy="last",
         start_on="human",
@@ -129,7 +146,7 @@ def _windowed(messages: list[BaseMessage]) -> list[BaseMessage]:
             extra={
                 "messages_recus": len(messages),
                 "messages_envoyes": len(windowed),
-                "plafond_tokens": MAX_CONTEXT_TOKENS,
+                "plafond_tokens": max_tokens,
             },
         )
     return windowed
@@ -161,6 +178,7 @@ def build_graph(model: BaseChatModel | None = None, config: settings.Settings | 
             extra={"mcp": len(outils_mcp), "total": len(tools)},
         )
     max_loops = config.agent.max_tool_loops
+    max_context = config.agent.max_context_tokens
     prompt = system_prompt(config.agent.system_prompt)
 
     model = model or create_model(
@@ -182,7 +200,7 @@ def build_graph(model: BaseChatModel | None = None, config: settings.Settings | 
         La somme des chunks reconstitue un AIMessageChunk complet, tool_calls parsés
         compris.
         """
-        history = _windowed(state["messages"])
+        history = _windowed(state["messages"], max_context)
 
         response = None
         async for chunk in model_with_tools.astream([prompt, *history]):

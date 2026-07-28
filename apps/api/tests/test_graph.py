@@ -300,3 +300,178 @@ async def test_un_400_n_est_jamais_rejoue():
     # Une seule tentative, malgré `pannes=99` : le graphe n'a pas rejoué.
     assert "error" in types_of(chunks)
     assert model.echecs == 1
+
+
+# --- Consommation réelle rapportée par le provider ----------------------------
+
+
+def usage(entree: int, sortie: int, **details: Any) -> dict[str, Any]:
+    return {
+        "input_tokens": entree,
+        "output_tokens": sortie,
+        "total_tokens": entree + sortie,
+        **details,
+    }
+
+
+def metadata_of(chunks: list[dict]) -> dict | None:
+    return next(
+        (c["messageMetadata"] for c in chunks if c["type"] == "message-metadata"), None
+    )
+
+
+async def test_la_consommation_du_provider_est_emise_en_message_metadata():
+    """Les clés sont celles que lit `useThreadTokenUsage()` d'assistant-ui.
+
+    Elles ne sont pas négociables : le hook ignore silencieusement toute clé
+    qu'il ne connaît pas, et la jauge afficherait alors un contexte vide sans la
+    moindre erreur.
+    """
+    model = FakeToolCallingModel(
+        responses=[
+            AIMessage(
+                content="ok",
+                usage_metadata=usage(
+                    1204,
+                    18,
+                    input_token_details={"cache_read": 512},
+                    output_token_details={"reasoning": 7},
+                ),
+            )
+        ]
+    )
+
+    chunks = await collect(model, [user("salut")])
+
+    assert metadata_of(chunks) == {
+        "usage": {
+            "inputTokens": 1204,
+            "outputTokens": 18,
+            "totalTokens": 1222,
+            "cachedInputTokens": 512,
+            "reasoningTokens": 7,
+        }
+    }
+
+
+async def test_la_metadata_precede_finish():
+    """Le client applique `message-metadata` au message EN COURS.
+
+    Émise après `finish`, elle n'aurait plus de message auquel s'attacher — et
+    l'oubli serait invisible : aucune erreur, juste une jauge qui reste vide.
+    """
+    model = FakeToolCallingModel(
+        responses=[AIMessage(content="ok", usage_metadata=usage(10, 2))]
+    )
+
+    ordre = types_of(await collect(model, [user("salut")]))
+
+    assert ordre.index("message-metadata") < ordre.index("finish")
+
+
+async def test_sur_plusieurs_tours_c_est_le_DERNIER_qui_compte():
+    """Le tour final porte l'historique complet : c'est lui, la taille du contexte.
+
+    Sommer les tours donnerait un nombre bien supérieur à la fenêtre réelle,
+    puisque chaque tour renvoie tout l'historique au modèle.
+    """
+    model = FakeToolCallingModel(
+        responses=[
+            AIMessage(
+                content="",
+                tool_calls=[tool_call("calculator", {"expression": "2+2"}, "c1")],
+                usage_metadata=usage(300, 20),
+            ),
+            AIMessage(content="4", usage_metadata=usage(980, 5)),
+        ]
+    )
+
+    chunks = await collect(model, [user("2+2 ?")])
+
+    assert metadata_of(chunks)["usage"]["inputTokens"] == 980
+
+
+async def test_aucune_metadata_quand_le_provider_ne_rapporte_rien():
+    """Certains providers ne renvoient pas les tokens en streaming.
+
+    Aucun chiffre ne vaut mieux qu'un zéro fabriqué : un zéro se lirait comme une
+    mesure, et l'interface afficherait « contexte vide » avec aplomb.
+    """
+    model = FakeToolCallingModel(responses=[AIMessage(content="ok")])
+
+    chunks = await collect(model, [user("salut")])
+
+    assert metadata_of(chunks) is None
+    assert "finish" in types_of(chunks)
+
+
+# --- Fenêtre de contexte réglable ---------------------------------------------
+
+
+async def test_la_fenetre_de_contexte_suit_la_configuration():
+    """Le plafond n'est plus une constante : un modèle à grande fenêtre ne doit pas
+    se faire tronquer sur la mesure du plus petit du catalogue."""
+    long_texte = "mot " * 4000  # ~4 000 tokens estimés
+    messages = [
+        HumanMessage(content=long_texte),
+        AIMessage(content="ok"),
+        HumanMessage(content=long_texte),
+        AIMessage(content="ok"),
+        HumanMessage(content="et maintenant ?"),
+    ]
+
+    serre = _windowed(messages, 2_000)
+    large = _windowed(messages, 100_000)
+
+    assert len(serre) < len(large)
+    assert len(large) == len(messages)
+    assert count_tokens_approximately(serre) <= 2_000
+
+
+async def test_le_graphe_applique_le_plafond_configure():
+    from agent.core.settings import AgentConfig, ModelConfig, Settings
+
+    config = Settings(
+        agent=AgentConfig(max_context_tokens=2_000),
+        model=ModelConfig(),
+        tools={},
+    )
+    model = FakeToolCallingModel(responses=[AIMessage(content="ok")])
+    graph = build_graph(model, config)
+
+    long_texte = "mot " * 4000
+    await graph.ainvoke(
+        {"messages": [HumanMessage(content=long_texte), HumanMessage(content="et ?")]}
+    )
+
+    # Le modèle n'a reçu que ce qui tient dans 2 000 tokens, prompt système exclu.
+    envoyes = model.call_log[0]
+    assert count_tokens_approximately(envoyes[1:]) <= 2_000
+
+
+# --- Erreurs lisibles ---------------------------------------------------------
+
+
+def test_un_depassement_de_contexte_devient_une_instruction():
+    from agent.protocol.stream import friendly_error
+
+    brut = RuntimeError(
+        "Error code: 400 - {'error': {'message': \"This model's maximum context "
+        "length is 32768 tokens. However, your messages resulted in 41022 tokens.\", "
+        "'type': 'invalid_request_error', 'code': 'context_length_exceeded'}}"
+    )
+
+    message = friendly_error(brut)
+
+    assert "fenêtre de contexte" in message
+    assert "nouvelle conversation" in message
+    # Le jargon du provider ne doit pas fuiter jusqu'à l'utilisateur.
+    assert "context_length_exceeded" not in message
+
+
+def test_une_erreur_inconnue_n_est_pas_reecrite():
+    """Ne jamais remplacer un message qu'on n'a pas compris : on perdrait la seule
+    information exploitable pour diagnostiquer."""
+    from agent.protocol.stream import friendly_error
+
+    assert friendly_error(RuntimeError("clé API invalide")) == "clé API invalide"

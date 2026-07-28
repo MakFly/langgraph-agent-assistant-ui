@@ -14,6 +14,15 @@
 
 export const CHAT_BASE = "/ichat";
 
+/**
+ * URL canonique de l'écran de connexion. Symétrique de `CHAT_BASE` : l'app
+ * authentifiée vit sur `/ichat`, la connexion sur `/login`. Un utilisateur anonyme
+ * y est ramené quelle que soit l'URL demandée (cf. `auth-context`), pour que le
+ * login ait toujours la même adresse — et que l'autofill de démo, qui dépend de
+ * l'URL, s'y déclenche.
+ */
+export const LOGIN_PATH = "/login";
+
 const THREAD_SEGMENT = `${CHAT_BASE}/c/`;
 
 /** L'id de conversation porté par l'URL, s'il y en a un. */

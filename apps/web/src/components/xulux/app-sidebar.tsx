@@ -1,4 +1,3 @@
-import { BookText, Calculator, CloudSun, Newspaper } from "lucide-react"
 import { ThreadList } from "@/components/assistant-ui/thread-list"
 import { SettingsMenuItem } from "@/components/settings/settings-menu-item"
 import { LogoIcon } from "@/components/xulux/logo"
@@ -16,13 +15,20 @@ import {
 } from "@/components/ui/sidebar"
 import type { HealthState } from "@/hooks/use-health"
 import { CHAT_BASE } from "@/lib/chat-route"
+import { resolveToolMeta } from "@/lib/tool-metadata"
 
-const TOOLS = [
-  { name: "wikipedia_search", label: "Wikipédia", icon: BookText },
-  { name: "hacker_news_search", label: "Hacker News", icon: Newspaper },
-  { name: "weather_forecast", label: "Météo", icon: CloudSun },
-  { name: "calculator", label: "Calculatrice", icon: Calculator },
+// Icône et libellé viennent du registre partagé ; ici on ne fixe que la liste
+// et l'ordre des outils affichés dans la sidebar.
+const TOOL_NAMES = [
+  "wikipedia_search",
+  "hacker_news_search",
+  "weather_forecast",
+  "calculator",
 ] as const
+const TOOLS = TOOL_NAMES.map((name) => {
+  const meta = resolveToolMeta(name)
+  return { name, label: meta.label, icon: meta.icon }
+})
 
 /**
  * Structure reprise de la sidebar xulux (en-tête logo, groupes, footer). Le

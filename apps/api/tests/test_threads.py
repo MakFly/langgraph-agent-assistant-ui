@@ -3,6 +3,11 @@
 Les tests tapent la vraie base (`infra-postgres`) via l'app ASGI : c'est du SQL
 réel, avec la contrainte de clé étrangère et la cascade. Ils travaillent dans un
 scope dédié et nettoient derrière eux.
+
+Depuis le RBAC, ces routes exigent une session : la fixture `client` crée un
+compte jetable et se connecte. Le `scope` reste testé ici comme sous-espace d'un
+même compte ; l'étanchéité *entre comptes*, elle, est prouvée dans
+`test_auth.py` — c'est une autre propriété.
 """
 
 from __future__ import annotations
@@ -10,30 +15,47 @@ from __future__ import annotations
 import pytest
 from httpx import ASGITransport, AsyncClient
 
+from agent.core import users
 from agent.infra import db
 from agent.main import app
 
 SCOPE = "pytest"
+EMAIL = "pytest-threads@example.com"
+PASSWORD = "mot-de-passe-de-test-1"
 
 
 @pytest.fixture(autouse=True)
-async def database():
+async def database(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("AUTH_SECRET", "secret-de-test-suffisamment-long-pour-hs256")
+
     try:
         await db.connect()
     except Exception as error:  # pragma: no cover
         pytest.skip(f"Postgres injoignable : {error}")
 
-    await db.pool().execute("DELETE FROM threads WHERE scope = $1", SCOPE)
+    await _cleanup()
+    users.reset_throttle()
     yield
-    await db.pool().execute("DELETE FROM threads WHERE scope = $1", SCOPE)
+    await _cleanup()
     await db.disconnect()
+
+
+async def _cleanup() -> None:
+    await db.pool().execute("DELETE FROM threads WHERE scope = $1", SCOPE)
+    # Les conversations du compte jetable partent en cascade.
+    await db.pool().execute("DELETE FROM users WHERE email = $1", EMAIL)
 
 
 @pytest.fixture
 async def client():
+    await users.create_user(EMAIL, PASSWORD, display_name="pytest")
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
     ) as http_client:
+        login = await http_client.post(
+            "/api/auth/login", json={"email": EMAIL, "password": PASSWORD}
+        )
+        assert login.status_code == 200, login.text
         yield http_client
 
 

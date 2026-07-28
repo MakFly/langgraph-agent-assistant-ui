@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 
 export type Health = {
   status: "ok";
+  /** La sonde est publique : anonyme, elle ne publie pas la configuration. */
+  authenticated: boolean;
   provider: string;
   tools: string[];
   /** false quand Postgres est injoignable : le chat marche, sans historique. */

@@ -1,10 +1,15 @@
 """API de configuration.
 
 Comme pour les conversations, les tests tapent la vraie base (`infra-postgres`)
-via l'app ASGI. Différence importante : la configuration est **globale** (il n'y a
-pas d'auth, donc pas de scope), donc la fixture vide les tables `settings` et
-`mcp_servers` avant ET après chaque test, et republie le snapshot en mémoire —
-sinon un réglage laissé en base contaminerait le reste de la suite.
+via l'app ASGI. Différence importante : la configuration est **globale** — elle
+n'appartient à personne, elle s'applique à tout le monde. La fixture vide donc
+les tables `settings` et `mcp_servers` avant ET après chaque test, et republie le
+snapshot en mémoire — sinon un réglage laissé en base contaminerait le reste de
+la suite.
+
+C'est aussi pour cette raison que muter la configuration demande le rôle `admin` :
+la fixture `client` se connecte avec un compte administrateur jetable. Le refus
+opposé à un simple membre est vérifié dans `test_auth.py`.
 """
 
 from __future__ import annotations
@@ -14,21 +19,27 @@ from httpx import ASGITransport, AsyncClient
 from langchain_core.messages import AIMessage
 from pydantic import Field
 
-from agent.core import graph, settings
+from agent.core import graph, settings, users
 from agent.core.model import DEFAULT_MODELS
 from agent.infra import db
 from agent.main import app
 from tests.fakes import FakeToolCallingModel, tool_call
 
+ADMIN_EMAIL = "pytest-settings-admin@example.com"
+ADMIN_PASSWORD = "mot-de-passe-de-test-1"
+
 
 @pytest.fixture(autouse=True)
-async def database():
+async def database(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("AUTH_SECRET", "secret-de-test-suffisamment-long-pour-hs256")
+
     try:
         await db.connect()
     except Exception as error:  # pragma: no cover
         pytest.skip(f"Postgres injoignable : {error}")
 
     await _reset()
+    users.reset_throttle()
     yield
     await _reset()
     await db.disconnect()
@@ -37,6 +48,7 @@ async def database():
 async def _reset() -> None:
     await db.pool().execute("DELETE FROM settings")
     await db.pool().execute("DELETE FROM mcp_servers")
+    await db.pool().execute("DELETE FROM users WHERE email = $1", ADMIN_EMAIL)
     await settings.refresh()
     # Un test monkeypatche `build_graph` : on jette le cache pour ne pas laisser
     # un faux graphe derrière nous.
@@ -45,9 +57,14 @@ async def _reset() -> None:
 
 @pytest.fixture
 async def client():
+    await users.create_user(ADMIN_EMAIL, ADMIN_PASSWORD, role="admin")
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
     ) as http_client:
+        login = await http_client.post(
+            "/api/auth/login", json={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD}
+        )
+        assert login.status_code == 200, login.text
         yield http_client
 
 
@@ -73,8 +90,10 @@ async def test_valeurs_par_defaut_sans_configuration(client: AsyncClient):
         "system_prompt": None,
         "max_tool_loops": settings.DEFAULT_MAX_TOOL_LOOPS,
         "temperature": 0.0,
+        "max_context_tokens": settings.DEFAULT_MAX_CONTEXT_TOKENS,
         "max_tool_loops_range": [1, 20],
         "temperature_range": [0.0, 2.0],
+        "max_context_tokens_range": list(settings.MAX_CONTEXT_TOKENS_RANGE),
         # Le front affiche le contexte restant : il lui faut le plafond réellement
         # appliqué, pas une constante dupliquée côté client.
         "context_window_tokens": settings.MAX_CONTEXT_TOKENS,
@@ -86,6 +105,9 @@ async def test_valeurs_par_defaut_sans_configuration(client: AsyncClient):
         "hacker_news_search",
         "weather_forecast",
         "calculator",
+        # Recherche dans le corpus interne : activable et désactivable comme les
+        # autres, mais seule à filtrer ses résultats sur l'identité de l'appelant.
+        "document_search",
     }
     assert body["mcp_servers"] == []
 

@@ -34,10 +34,16 @@ export type AgentSettings = {
   system_prompt: string | null
   max_tool_loops: number
   temperature: number
+  /** Plafond au-delà duquel le serveur rogne l'historique. */
+  max_context_tokens: number
   /** Bornes fournies par l'API : le front affiche exactement ce qu'elle valide. */
   max_tool_loops_range: [number, number]
   temperature_range: [number, number]
-  /** Plafond au-delà duquel le serveur rogne l'historique (cf. graph.MAX_CONTEXT_TOKENS). */
+  max_context_tokens_range: [number, number]
+  /**
+   * Alias historique de `max_context_tokens`, lu par la jauge du composer. Même
+   * valeur, conservée pour ne pas casser un contrat déjà en place.
+   */
   context_window_tokens: number
 }
 

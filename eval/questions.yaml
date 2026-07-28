@@ -1,0 +1,71 @@
+# Jeu d'évaluation du RAG.
+#
+# Chaque cas décrit une question, les groupes de celui qui la pose, et le ou les
+# documents qui DOIVENT remonter. C'est le seul moyen de répondre à « est-ce que
+# le RAG marche ? » autrement que par une opinion.
+#
+# Sans ce fichier, changer la taille des fragments ou le modèle d'embedding est
+# un pari : on ne saurait pas si ça améliore ou dégrade quoi que ce soit.
+#
+#   question : posée telle qu'un utilisateur la poserait, pas en mots-clés.
+#   groups   : groupes de l'utilisateur qui pose la question.
+#   expect   : sources attendues dans le top-k (chemin relatif dans corpus/).
+#
+# Ce jeu couvre le corpus de démonstration : 12 cas pour 4 documents. Sur un
+# corpus réel, viser 30 cas MINIMUM, et surtout des questions réellement posées
+# par les utilisateurs — pas des questions écrites en regardant les documents,
+# qui reprennent leur vocabulaire et flattent artificiellement le score.
+
+# --- Questions publiques ------------------------------------------------------
+
+- question: Combien de jours de télétravail puis-je prendre par semaine ?
+  groups: [public]
+  expect: [public/charte-teletravail.md]
+
+- question: Quel jour tout le monde doit-il être présent au bureau ?
+  groups: [public]
+  expect: [public/charte-teletravail.md]
+
+- question: Est-ce que l'entreprise rembourse ma connexion internet ?
+  groups: [public]
+  expect: [public/charte-teletravail.md]
+
+- question: Quel est le montant de l'indemnité de télétravail ?
+  groups: [public]
+  expect: [public/charte-teletravail.md]
+
+- question: Combien de temps faut-il pour obtenir un accès à un outil interne ?
+  groups: [public]
+  expect: [public/procedure-acces-outils.md]
+
+- question: Au bout de combien de temps un accès temporaire expire-t-il ?
+  groups: [public]
+  expect: [public/procedure-acces-outils.md]
+
+- question: Qui contacter si mon compte est compromis ?
+  groups: [public]
+  expect: [public/procedure-acces-outils.md]
+
+# --- Questions réservées au groupe finance ------------------------------------
+
+- question: Quelle est l'enveloppe budgétaire pour l'outillage cette année ?
+  groups: [finance, public]
+  expect: [finance/budget-outillage-2026.md]
+
+- question: À partir de quel montant faut-il une double validation ?
+  groups: [finance, public]
+  expect: [finance/budget-outillage-2026.md]
+
+- question: Quand les engagements budgétaires sont-ils gelés en fin d'année ?
+  groups: [finance, public]
+  expect: [finance/budget-outillage-2026.md]
+
+# --- Questions réservées au groupe RH -----------------------------------------
+
+- question: Combien de jours de congés j'acquiers par mois ?
+  groups: [rh, public]
+  expect: [rh/procedure-conges.md]
+
+- question: Que deviennent mes congés non pris à la fin de la période ?
+  groups: [rh, public]
+  expect: [rh/procedure-conges.md]

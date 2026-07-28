@@ -8,8 +8,11 @@ import {
   type SuggestionConfig,
 } from "@assistant-ui/react";
 import { AssistantChatTransport } from "@assistant-ui/react-ai-sdk";
+import { LoaderCircleIcon } from "lucide-react";
 import { Thread } from "@/components/assistant-ui/thread";
 import { ToolFallback } from "@/components/assistant-ui/tool-fallback";
+import { AuthProvider, useAuth } from "@/components/auth/auth-context";
+import { LoginScreen } from "@/components/auth/login-screen";
 import { usePersistentChatRuntime } from "@/components/chat/use-persistent-chat-runtime";
 import { SettingsProvider } from "@/components/settings/settings-context";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
@@ -23,6 +26,11 @@ import { useHealth } from "@/hooks/use-health";
 
 /** Chaque suggestion vise un outil différent — c'est la démo en un clic. */
 const SUGGESTIONS: SuggestionConfig[] = [
+  {
+    title: "Documents internes",
+    label: "procédures et règles",
+    prompt: "Combien de jours de télétravail puis-je prendre par semaine ?",
+  },
   {
     title: "Météo",
     label: "Lyon, 3 jours",
@@ -49,7 +57,23 @@ const WithSuggestions: FC<PropsWithChildren> = ({ children }) => {
   return <AuiProvider value={aui}>{children}</AuiProvider>;
 };
 
-export default function App() {
+/** Attente de la vérification de session — quelques dizaines de ms en pratique. */
+const Splash: FC = () => (
+  <div className="bg-background text-muted-foreground flex min-h-dvh items-center justify-center">
+    <LoaderCircleIcon className="size-5 motion-safe:animate-spin" aria-hidden />
+    <span className="sr-only">Vérification de la session…</span>
+  </div>
+);
+
+/**
+ * L'application de chat elle-même.
+ *
+ * Séparée de la porte d'entrée à dessein : le runtime de conversation n'est
+ * monté qu'une fois l'utilisateur connu. Sinon il chargerait la liste des
+ * conversations avant l'authentification, prendrait un 401, et afficherait une
+ * erreur là où il n'y a qu'une session à ouvrir.
+ */
+const ChatApp: FC = () => {
   const health = useHealth();
   // La conversation ouverte vit dans l'URL (/ichat et /ichat/c/:id), pas dans un
   // état local : lien profond et boutons précédent/suivant fonctionnent d'office.
@@ -59,6 +83,7 @@ export default function App() {
   const transport = useMemo(() => new AssistantChatTransport({ api: "/api/chat" }), []);
 
   // apiBase vide → URLs relatives, donc same-origin pour l'historisation aussi.
+  // Le cookie de session part avec, sans configuration particulière.
   const runtime = usePersistentChatRuntime({
     apiBase: "",
     scope: "poc",
@@ -99,5 +124,22 @@ export default function App() {
         </SettingsProvider>
       </WithSuggestions>
     </AssistantRuntimeProvider>
+  );
+};
+
+/** Porte d'entrée : rien de l'application n'est monté sans session valide. */
+const AuthGate: FC = () => {
+  const auth = useAuth();
+
+  if (auth.state === "loading") return <Splash />;
+  if (auth.state === "anonymous") return <LoginScreen />;
+  return <ChatApp />;
+};
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <AuthGate />
+    </AuthProvider>
   );
 }

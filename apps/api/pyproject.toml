@@ -18,6 +18,15 @@ dependencies = [
     "langchain-openai>=1.4.1",
     # Serveurs MCP déclarés dans la configuration → outils du graphe.
     "langchain-mcp-adapters>=0.1.9",
+    # RBAC natif : hachage de mot de passe et jetons signés. Argon2id est le défaut
+    # recommandé par l'OWASP ; PyJWT valide la signature ET les claims (exp, iss).
+    "argon2-cffi>=23.1.0",
+    "pyjwt>=2.10.1",
+    # RAG : extraction PDF, jeu d'évaluation. Pas de paquet `pgvector` : les
+    # vecteurs partent en littéral texte casté (`$n::vector`), donc en paramètre
+    # SQL comme les autres — un codec binaire de plus n'apporterait rien ici.
+    "pypdf>=5.1.0",
+    "pyyaml>=6.0.2",
 ]
 
 [dependency-groups]
@@ -39,6 +48,12 @@ src = ["src"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.ruff.lint.flake8-bugbear]
+# `def route(user = Depends(current_user))` est l'idiome FastAPI d'injection : la
+# valeur par défaut est un marqueur résolu à chaque requête, pas un objet mutable
+# partagé entre appels. B008 vise un vrai piège Python, mais pas celui-là.
+extend-immutable-calls = ["fastapi.Depends", "fastapi.Query", "fastapi.params.Depends"]
 
 [build-system]
 requires = ["hatchling"]

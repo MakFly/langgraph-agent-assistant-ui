@@ -2,7 +2,6 @@
 import {
 	Avatar,
 	AvatarFallback,
-	AvatarImage,
 } from "@/components/ui/avatar";
 import {
 	DropdownMenu,
@@ -15,30 +14,39 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { UserIcon, BellIcon, CommandIcon, LifeBuoyIcon, GraduationCapIcon, CreditCardIcon, LogOutIcon } from "lucide-react";
 
-const user = {
-	name: "Shaban Haider",
-	email: "shaban@efferd.com",
-	avatar: "https://github.com/shabanhr.png",
-};
+import { useAuth } from "@/components/auth/auth-context";
 
 export function NavUser() {
+	const auth = useAuth();
+
+	// Ce composant n'est monté que dans l'application, donc derrière la porte
+	// d'authentification. Le repli couvre le seul cas restant : une session qui
+	// expire pendant que le menu est ouvert.
+	const user =
+		auth.state === "authenticated"
+			? auth.user
+			: { email: "session expirée", display_name: null, role: "member" as const, groups: [] };
+
+	const name = user.display_name || user.email;
+	// Pas d'avatar distant : une photo servie par un tiers, c'est une requête qui
+	// signale à ce tiers qui utilise l'application, et quand.
+	const initials = name.slice(0, 2).toUpperCase();
+
 	return (
 		<DropdownMenu>
 			<DropdownMenuTrigger asChild>
-				<Avatar className="size-8">
-					<AvatarImage src={user.avatar} />
-					<AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
+				<Avatar className="size-8 cursor-pointer">
+					<AvatarFallback>{initials}</AvatarFallback>
 				</Avatar>
 			</DropdownMenuTrigger>
 			<DropdownMenuContent align="end" className="w-60">
 				<DropdownMenuItem className="flex items-center justify-start gap-2">
-					<DropdownMenuLabel className="flex items-center gap-3">
+					<DropdownMenuLabel className="flex min-w-0 items-center gap-3">
 						<Avatar className="size-10">
-							<AvatarImage src={user.avatar} />
-							<AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
+							<AvatarFallback>{initials}</AvatarFallback>
 						</Avatar>
-						<div>
-							<span className="font-medium text-foreground">{user.name}</span>{" "}
+						<div className="min-w-0">
+							<span className="font-medium text-foreground">{name}</span>{" "}
 							<br />
 							<div className="max-w-full overflow-hidden overflow-ellipsis whitespace-nowrap text-muted-foreground text-xs">
 								{user.email}
@@ -46,6 +54,18 @@ export function NavUser() {
 						</div>
 					</DropdownMenuLabel>
 				</DropdownMenuItem>
+				<DropdownMenuSeparator />
+				{/* Rôle et groupes : c'est exactement ce qui décide de ce que l'agent
+				    a le droit de chercher. L'afficher évite le « pourquoi il ne
+				    trouve pas ce document ? » qui n'a sinon aucune réponse visible. */}
+				<div className="px-2 py-1.5 text-xs text-muted-foreground">
+					<div>
+						rôle : <span className="text-foreground">{user.role}</span>
+					</div>
+					<div className="mt-0.5 break-words">
+						groupes : <span className="text-foreground">{user.groups.join(", ") || "—"}</span>
+					</div>
+				</div>
 				<DropdownMenuSeparator />
 				<DropdownMenuGroup>
 					<DropdownMenuItem>
@@ -93,11 +113,14 @@ export function NavUser() {
 				<DropdownMenuGroup>
 					<DropdownMenuItem
 						className="w-full cursor-pointer"
+						onSelect={() => {
+							void auth.logout();
+						}}
 						variant="destructive"
 					>
 						<LogOutIcon
 						/>
-						Log out
+						Se déconnecter
 					</DropdownMenuItem>
 				</DropdownMenuGroup>
 			</DropdownMenuContent>
