@@ -1,8 +1,17 @@
-import { useState } from "react"
-import { BotIcon, CpuIcon, DatabaseZapIcon, ServerIcon, WrenchIcon } from "lucide-react"
+import { useEffect, useState } from "react"
+import {
+  BotIcon,
+  CpuIcon,
+  DatabaseZapIcon,
+  FolderSyncIcon,
+  ServerIcon,
+  WrenchIcon,
+} from "lucide-react"
+import { useAuth } from "@/components/auth/auth-context"
 import { AgentPanel } from "@/components/settings/agent-panel"
 import { McpPanel } from "@/components/settings/mcp-panel"
 import { ModelPanel } from "@/components/settings/model-panel"
+import { SourcesPanel } from "@/components/settings/sources-panel"
 import { useSettingsContext } from "@/components/settings/settings-context"
 import { ToolsPanel } from "@/components/settings/tools-panel"
 import { Button } from "@/components/ui/button"
@@ -21,6 +30,7 @@ const TABS = [
   { id: "agent", label: "Agent", icon: BotIcon },
   { id: "model", label: "Modèle", icon: CpuIcon },
   { id: "mcp", label: "MCP", icon: ServerIcon },
+  { id: "sources", label: "Sources", icon: FolderSyncIcon, admin: true },
 ] as const
 
 type TabId = (typeof TABS)[number]["id"]
@@ -50,8 +60,15 @@ export function SettingsDialog({
   onOpenChange: (open: boolean) => void
 }) {
   const [tab, setTab] = useState<TabId>("tools")
+  const auth = useAuth()
   const settings = useSettingsContext()
   const { state, saving } = settings
+  const isAdmin = auth.state === "authenticated" && auth.user.role === "admin"
+  const tabs = TABS.filter((item) => !("admin" in item) || isAdmin)
+
+  useEffect(() => {
+    if (!tabs.some((item) => item.id === tab)) setTab("tools")
+  }, [tab, tabs])
 
   const readOnly = state.state !== "ready" || !state.data.persisted
 
@@ -64,7 +81,10 @@ export function SettingsDialog({
           "top-0 left-0 flex h-dvh max-h-dvh w-full max-w-full translate-x-0 translate-y-0 flex-col gap-0 rounded-none p-0",
           // Tablette et au-delà : modale centrée, colonne étroite et haute —
           // 50 % de la largeur, 85 % de la hauteur du viewport.
-          "sm:top-1/2 sm:left-1/2 sm:h-[85dvh] sm:w-[50dvw] sm:max-w-[50dvw] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-4xl",
+          "sm:top-1/2 sm:left-1/2 sm:h-[85dvh] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-4xl",
+          tab === "sources"
+            ? "sm:w-[82dvw] sm:max-w-6xl"
+            : "sm:w-[50dvw] sm:max-w-[50dvw]",
         )}
         // Pas de flou sur un overlay plein écran (perf GPU mobile).
         overlayClassName="supports-backdrop-filter:backdrop-blur-none"
@@ -83,7 +103,7 @@ export function SettingsDialog({
           className="flex gap-1 overflow-x-auto border-b px-4 pt-3 pb-3 sm:px-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
           role="tablist"
         >
-          {TABS.map(({ id, label, icon: Icon }) => (
+          {tabs.map(({ id, label, icon: Icon }) => (
             <button
               aria-controls={`settings-panel-${id}`}
               aria-selected={tab === id}
@@ -139,7 +159,12 @@ export function SettingsDialog({
           )}
 
           {state.state === "ready" && (
-            <div className="flex w-full max-w-3xl flex-col gap-5">
+            <div
+              className={cn(
+                "flex w-full flex-col gap-5",
+                tab === "sources" ? "max-w-none" : "max-w-3xl",
+              )}
+            >
               {!state.data.persisted && (
                 <p className="text-muted-foreground flex items-start gap-2 rounded-3xl border border-dashed px-3 py-2 text-xs">
                   <DatabaseZapIcon aria-hidden className="mt-0.5 size-3.5 shrink-0" />
@@ -186,6 +211,8 @@ export function SettingsDialog({
                   servers={state.data.mcp_servers}
                 />
               )}
+
+              {tab === "sources" && isAdmin && <SourcesPanel />}
             </div>
           )}
         </div>

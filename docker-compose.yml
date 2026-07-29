@@ -21,8 +21,13 @@ services:
       - ./apps/api/tests:/app/tests
       # Corpus à indexer, en lecture seule : `make ingest` lit, n'écrit jamais.
       - ./corpus:/app/corpus:ro
+      # Sources déposées depuis l'interface. Séparées du corpus Git et persistées.
+      - ingestion_data:/data/ingestion
       # Jeu d'évaluation, lu par `make eval`.
       - ./eval:/app/eval:ro
+      # Boîte de réception de démonstration, lue par `make inbox`. En lecture
+      # seule : le traitement prépare des dossiers, il ne touche pas au courrier.
+      - ./mailbox:/app/mailbox:ro
     depends_on:
       db:
         condition: service_healthy
@@ -92,3 +97,4 @@ volumes:
   web_node_modules:
   db_data:
   rag_data:
+  ingestion_data:

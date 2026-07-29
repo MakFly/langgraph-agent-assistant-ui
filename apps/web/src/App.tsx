@@ -28,8 +28,9 @@ import { useHealth } from "@/hooks/use-health";
 const SUGGESTIONS: SuggestionConfig[] = [
   {
     title: "Documents internes",
-    label: "procédures et règles",
-    prompt: "Combien de jours de télétravail puis-je prendre par semaine ?",
+    label: "contrats et procédures",
+    prompt:
+      "Le client a livré un chantier et le carrelage est moche mais tient bien : est-ce couvert par la décennale ?",
   },
   {
     title: "Météo",

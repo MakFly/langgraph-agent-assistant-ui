@@ -6,8 +6,8 @@ export const Welcome: FC = () => (
       Demandez, l'agent ira chercher.
     </h2>
     <p className="text-muted-foreground max-w-md text-sm text-balance">
-      Wikipédia, Hacker News, la météo et une calculatrice — le graphe enchaîne les outils
-      nécessaires avant de répondre.
+      Documents internes, Wikipédia, Hacker News, météo et calculatrice — le graphe
+      choisit et enchaîne les outils nécessaires avant de répondre.
     </p>
   </div>
 );

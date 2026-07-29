@@ -231,7 +231,7 @@ cascade, scopes étanches, upsert sur réémission d'un message (édition, rég�
 
 ## Configuration
 
-Accessible depuis la sidebar (Configuration), quatre onglets :
+Accessible depuis la sidebar (Configuration), cinq onglets :
 
 - **Outils** — activer/désactiver chaque outil. Un outil désactivé n'est ni déclaré au
   modèle ni exécutable : il disparaît du `bind_tools` **et** du `ToolNode`.
@@ -241,6 +241,8 @@ Accessible depuis la sidebar (Configuration), quatre onglets :
 - **MCP** — CRUD des serveurs, et leurs outils sont **découverts et bindés au modèle**
   (`agent/core/mcp.py`). Un serveur injoignable est signalé dans le panneau et ignoré, sans
   bloquer le démarrage ni le chat. Détails : [docs/settings.md](docs/settings.md#serveurs-mcp).
+- **Sources** *(administrateurs)* — dépôt de fichiers, ACL, OCR dynamique, simulation,
+  synchronisation et historique d'exécution.
 
 Les réglages s'appliquent **sans redémarrage**. C'est le piège de cette fonctionnalité :
 le graphe est mis en cache, et un cache non invalidé aurait rendu tous les réglages
@@ -263,12 +265,15 @@ apps/
         chat.py               POST /api/chat (SSE) · GET /api/health
         threads.py            historisation des conversations
         settings.py           router /api/settings : corps de requête, 503, codes
+        ingestion.py          sources, uploads et jobs d'indexation administrés
       core/                 ── le domaine : l'agent
         graph.py              StateGraph + fenêtre de contexte + reprise + cache
         model.py              fabrique de modèle + catalogue + capacités d'effort
         settings.py           configuration : modèles, snapshot, version, lecture/écriture
         mcp.py                découverte des outils des serveurs MCP
         callbacks.py          métriques de run (latence, tokens, durée des outils)
+        ingestion.py          persistance des sources, fichiers et exécutions
+        rag/ocr.py             rendu des pages et OCR provider/modèle dynamique
         tools/                un fichier par outil
       protocol/             ── le protocole AI SDK, dans les deux sens
         messages.py           UIMessage[] -> messages LangChain
@@ -348,8 +353,8 @@ réseau Docker, donc le front appelle une URL same-origin.
 ## Tests
 
 ```bash
-make test        # 89 tests dans le conteneur
-make test-unit   # 85 tests, sans les appels réseau
+make test        # 212 tests dans le conteneur
+make test-unit   # tests sans les appels réseau
 ```
 
 Les tests du graphe passent par `ui_message_stream()`, c'est-à-dire **le chemin exact de
@@ -363,17 +368,116 @@ au lieu d'appeler le code de production, et sont restés verts pendant que le mu
 
 ---
 
+## Recherche documentaire et verticale courtage
+
+Le corpus de démonstration est celui d'un **cabinet de courtage IARD** : 156 documents
+générés de façon déterministe (conditions générales, contrats, avenants, attestations,
+sinistres, fils de courriels, procédures internes), et une boîte de 15 courriels entrants
+à traiter.
+
+```bash
+make corpus     # régénère corpus/, eval/questions.yaml et mailbox/
+make ingest     # indexe (idempotent : rien à repayer si rien n'a changé)
+make eval       # rappel@k, couverture du fait, MRR, abstention, fuites d'ACL
+make ablation   # ce que chaque technique de recherche apporte, une par une
+make calibrate  # DÉDUIT le seuil d'abstention d'un critère écrit
+make inbox      # courriel → dossier préparé : la file de travail
+make inbox-eval # mesure la verticale sur 5 exécutions (moyenne + étendue)
+```
+
+### Ingestion administrée et OCR dynamique
+
+Un administrateur peut maintenant tout piloter dans **Configuration → Sources** :
+créer une source, déclarer ses groupes ACL, déposer des fichiers, simuler le lot,
+l'indexer et relire l'historique durable des exécutions.
+
+```text
+╔═══════════ OUTIL ADMIN ═══════════╗
+║ ┌─────────┐  HTTPS/multipart      ║
+║ │ Sources │ ────────────────────▶ ║
+║ └─────────┘                       ║
+╚═══════════════════════════════════╝
+                  │ config + fichiers
+                  ▼
+╔════════════════ API D'INGESTION ════════════════╗
+║ ┌──────────────┐  job durable  ┌─────────────┐ ║
+║ │ Source + ACL │ ─────────────▶ │ Parse/OCR   │ ║
+║ └──────────────┘                └─────────────┘ ║
+╚═════════════════════════════════════════════════╝
+                  │ pages scannées : image + prompt
+                  ▼
+       ┌───────────────────────────┐
+       │ Provider/modèle dynamique │
+       └───────────────────────────┘
+                  │ texte extrait
+                  ▼
+       ┌───────────────────────────┐
+       │ Index hybride pgvector    │
+       └───────────────────────────┘
+```
+
+Légende : les doubles cadres sont les surfaces produit ; les cadres simples sont
+les composants d'exécution. Composants : UI admin, API d'ingestion, volume
+`ingestion_data`, journal Postgres, parseur natif, OCR multimodal, index RAG.
+
+Le provider, le nom exact du modèle, le prompt, la résolution et le plafond de
+pages OCR sont enregistrés **par source**. Le modèle est un champ libre : le
+catalogue n'est qu'une aide et ne bloque pas un modèle privé ou un tag Ollama.
+Les clés restent dans `apps/api/.env`; l'UI ne reçoit qu'un booléen
+« configurée/absente ». Les PDF textuels ne partent pas au LLM : seules les pages
+sans couche texte sont rendues en image. Les images PNG/JPEG/WebP/TIFF suivent le
+même chemin.
+
+Les fichiers déposés vivent dans le volume `ingestion_data`, distinct du corpus
+Git. Un job `running` interrompu par un redémarrage est remis en file au prochain
+démarrage. La simulation ne vectorise pas et n'écrit pas l'index, mais un OCR
+activé appelle quand même le modèle — le plafond de pages est donc le garde-fou
+de coût en amont.
+
+Deux documents détaillent le raisonnement, les mesures et les limites :
+
+- [docs/rag-moderne.md](docs/rag-moderne.md) — la chaîne de recherche, le tableau
+  d'ablation, et les deux bugs que la mesure a trouvés (une branche lexicale qui ne
+  servait à rien, une fusion RRF qui dégradait ce qu'elle était censée améliorer) ;
+- [docs/verticale-courtage.md](docs/verticale-courtage.md) — la cascade de rattachement,
+  ce que le système refuse de décider, et pourquoi.
+
+L'essentiel en deux phrases : **le jeu d'évaluation compte 93 cas positifs et 35
+négatifs difficiles**, parce qu'un RAG se juge autant sur ce qu'il refuse de répondre
+que sur ce qu'il trouve. Et **38 de ces cas déclarent le fait exact que la réponse doit
+contenir**, parce que retrouver le bon document ne prouve pas qu'on a rendu le bon
+fragment — deux angles morts du rappel, mesurés séparément.
+
+---
+
 ## Limites connues
 
+- **Le corpus est synthétique.** C'est la limite qu'aucun code ne lève : elle ne tombera
+  qu'avec un corpus réel. Les écarts *relatifs* entre configurations restent bien plus
+  fiables que les valeurs absolues, et c'est sur eux que reposent toutes les décisions.
+- **La qualité RÉDACTIONNELLE des réponses n'est pas mesurée.** La couverture du fait
+  vérifie que le texte rendu contient la réponse, pas que le modèle la reformule bien.
+  Côté verticale en revanche, le brouillon est contrôlé : aucune référence étrangère au
+  dossier n'y est tolérée, et le contrôle est déterministe.
+- **La précision des pièces reste perfectible** : 2 à 6 pièces sur 27 sont réclamées
+  alors qu'elles étaient déjà au dossier. Un aller-retour inutile, pas une erreur de
+  fond — et le biais va dans le bon sens.
+- **Un modèle à température zéro n'est pas déterministe.** `make inbox-eval` mesure donc
+  sur cinq exécutions et rend l'étendue : sur quinze courriels, un cas vaut sept points.
+  Les lignes de `make ablation` qui appellent un LLM portent la même variance — les six
+  premières, elles, sont déterministes et reproductibles à l'identique.
 - **Les outils MCP ne sont pas filtrables un par un** : seul l'interrupteur du serveur
   existe, là où les outils du projet se désactivent individuellement.
 - **Pas de checkpointer LangGraph** : un run interrompu n'est pas repris, et la
   validation humaine avant appel d'outil (`interrupt()`) est hors de portée.
   Voir [docs/graph.md](docs/graph.md).
-- **Pas d'authentification** : toutes les routes sont ouvertes, et la configuration est
-  globale. Suffisant en local, inacceptable exposé.
+- **L'authentification et le RBAC sont natifs**, mais l'administration des comptes
+  reste en CLI : il n'existe pas encore d'écran de gestion des utilisateurs.
 - **Images de dev uniquement** : le Dockerfile de l'API embarque les outils de test et
   monte le code ; une image de prod demanderait un multi-stage sans `--reload`.
+- **Les jobs d'ingestion sont persistants mais exécutés dans le processus API.**
+  Le claim SQL empêche un doublon et un redémarrage reprend la file ; une charge
+  importante demanderait un worker dédié et une vraie file de messages.
 - **Le bouton pièce jointe** du composer est affiché par assistant-ui mais le backend ne
   traite pas les pièces jointes.
 - **Prompt injection** : une page Wikipédia ou un titre HN peut contenir des instructions

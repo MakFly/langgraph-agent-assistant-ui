@@ -17,9 +17,10 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from agent.api.auth import router as auth_router
 from agent.api.chat import router as chat_router
+from agent.api.ingestion import router as ingestion_router
 from agent.api.settings import router as settings_router
 from agent.api.threads import router as threads_router
-from agent.core import settings, users
+from agent.core import ingestion, settings, users
 from agent.infra import db, ragdb
 from agent.infra.log import setup_logging
 
@@ -67,7 +68,9 @@ async def lifespan(_: FastAPI):
         },
     )
 
+    await ingestion.resume_pending()
     yield
+    await ingestion.stop()
     await db.disconnect()
     await ragdb.disconnect()
 
@@ -94,3 +97,4 @@ app.include_router(auth_router)
 app.include_router(chat_router)
 app.include_router(threads_router)
 app.include_router(settings_router)
+app.include_router(ingestion_router)

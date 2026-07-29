@@ -1,0 +1,28 @@
+From: Fabrice Aouad <f.aouad@lumigraph.fr>
+To: gestion@rivelaine-courtage.fr
+Subject: Question sur la reprise =?utf-8?q?apr=C3=A8s?= l'incident
+Message-ID: <20260727.0003@rivelaine-courtage.fr>
+Date: Mon, 27 Jul 2026 10:00:00 +0000
+X-Attendu-Difficulte: domaine
+X-Attendu-Intention: coverage_question
+X-Attendu-Intention-Tolerees:
+X-Attendu-Client: lumigraph
+X-Attendu-Contrat: CYB-2026-0511
+X-Attendu-Section:
+X-Attendu-Pieces:
+X-Attendu-Pieces-Tolerees:
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 8bit
+MIME-Version: 1.0
+
+Bonjour Aurélie,
+
+Une question suite au sinistre du mois de mars : l'assureur nous a imposé une
+sauvegarde hors ligne hebdomadaire et un test de restauration tous les trois
+mois.
+
+Est-ce qu'on doit vous fournir une preuve de ces tests, ou est-ce que c'est
+seulement en cas de nouveau sinistre qu'ils la demanderont ?
+
+Merci,
+Fabrice

@@ -11,6 +11,12 @@ de session vérifié par `agent.api.auth`.
 **Il échoue fermé.** Sans identité dans la configuration, l'outil refuse de
 chercher au lieu de chercher sans filtre. La différence entre ces deux
 comportements, c'est un incident de confidentialité.
+
+**Il sait ne pas répondre.** Trois issues distinctes, et le modèle doit pouvoir
+les distinguer : des extraits ; « rien d'accessible ne correspond » ; « la
+recherche a bien tourné, et aucun document ne répond à cette question ». La
+troisième est celle qui manque à la plupart des RAG, et c'est elle qui évite de
+servir le contrat d'un autre client parce qu'il ressemblait un peu.
 """
 
 from __future__ import annotations
@@ -43,9 +49,14 @@ def _excerpt(text: str) -> str:
 async def document_search(query: str, config: RunnableConfig) -> str:
     """Recherche dans les documents internes de l'organisation.
 
-    À utiliser dès qu'une question porte sur des procédures, des règles
-    internes, des budgets ou des politiques propres à l'organisation — tout ce
-    qui ne se trouve pas dans une encyclopédie publique.
+    À utiliser EN PREMIER pour toute question métier de courtage ou d'assurance :
+    contrat, garantie, exclusion, franchise, sinistre, client, assureur, produit,
+    attestation ou avenant. À utiliser aussi pour les procédures, règles,
+    budgets et politiques de l'organisation.
+
+    Ne pas remplacer cette recherche par Wikipédia sous prétexte que le sujet
+    existe aussi publiquement : les documents accessibles de l'organisation
+    constituent la source de vérité métier.
 
     Chaque extrait rendu porte une référence `source#fragment` : cite-la.
 
@@ -72,14 +83,38 @@ async def document_search(query: str, config: RunnableConfig) -> str:
             ensure_ascii=False,
         )
 
-    passages = await retrieve.search(query, groups)
+    resultat = await retrieve.search_detailed(query, groups)
 
     logger.info(
         "recherche documentaire",
-        extra={"groupes": len(groups), "resultats": len(passages)},
+        extra={
+            "groupes": len(groups),
+            "candidats": resultat.candidates_seen,
+            "resultats": len(resultat.passages),
+            "abstention": resultat.abstained,
+            "hyde": resultat.hyde_used,
+            "hypotheses": resultat.hypotheses_generated,
+        },
     )
 
-    if not passages:
+    if resultat.abstained:
+        # Le cas qui fait la différence. La recherche a trouvé des candidats et les
+        # a jugés insuffisants : le dire explicitement, sinon le modèle comblera le
+        # vide avec le document le plus proche — celui d'un autre client.
+        return json.dumps(
+            {
+                "results": [],
+                "note": (
+                    "La recherche a examiné des documents accessibles et aucun ne "
+                    "répond à cette question. N'extrapole pas à partir d'un dossier "
+                    "voisin : indique que l'information n'a pas été trouvée."
+                ),
+                "diagnostic": resultat.reason,
+            },
+            ensure_ascii=False,
+        )
+
+    if not resultat.passages:
         # Formulation importante : « rien d'accessible » et non « rien n'existe ».
         # Le modèle ne doit pas affirmer qu'un document est inexistant alors qu'il
         # est seulement hors des droits de l'utilisateur.
@@ -100,7 +135,7 @@ async def document_search(query: str, config: RunnableConfig) -> str:
                     "source": passage.source,
                     "excerpt": _excerpt(passage.text),
                 }
-                for passage in passages
+                for passage in resultat.passages
             ]
         },
         ensure_ascii=False,

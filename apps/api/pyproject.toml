@@ -22,10 +22,13 @@ dependencies = [
     # recommandé par l'OWASP ; PyJWT valide la signature ET les claims (exp, iss).
     "argon2-cffi>=23.1.0",
     "pyjwt>=2.10.1",
-    # RAG : extraction PDF, jeu d'évaluation. Pas de paquet `pgvector` : les
+    # RAG : extraction PDF, rendu des pages scannées pour l'OCR, uploads et jeu
+    # d'évaluation. Pas de paquet `pgvector` : les
     # vecteurs partent en littéral texte casté (`$n::vector`), donc en paramètre
     # SQL comme les autres — un codec binaire de plus n'apporterait rien ici.
     "pypdf>=5.1.0",
+    "pymupdf>=1.26.0",
+    "python-multipart>=0.0.20",
     "pyyaml>=6.0.2",
 ]
 

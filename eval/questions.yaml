@@ -1,71 +1,781 @@
-# Jeu d'évaluation du RAG.
+# Jeu d'évaluation du RAG — courtage IARD professionnel.
 #
-# Chaque cas décrit une question, les groupes de celui qui la pose, et le ou les
-# documents qui DOIVENT remonter. C'est le seul moyen de répondre à « est-ce que
-# le RAG marche ? » autrement que par une opinion.
+# GÉNÉRÉ par corpus-gen/generate.py — ne pas éditer à la main, la prochaine
+# génération écraserait les modifications. Pour ajouter un cas, l'écrire dans le
+# générateur : il restera aligné sur le corpus.
 #
-# Sans ce fichier, changer la taille des fragments ou le modèle d'embedding est
-# un pari : on ne saurait pas si ça améliore ou dégrade quoi que ce soit.
+# Deux familles de cas :
 #
-#   question : posée telle qu'un utilisateur la poserait, pas en mots-clés.
-#   groups   : groupes de l'utilisateur qui pose la question.
-#   expect   : sources attendues dans le top-k (chemin relatif dans corpus/).
+#   expect: [...]   le ou les documents qui DOIVENT remonter dans le top-k.
+#   abstain: true   aucune source ne répond — le système doit le dire, et non
+#                   servir le document le plus proche. Un cas sur quatre, et
+#                   c'est la part que la plupart des évaluations oublient.
 #
-# Ce jeu couvre le corpus de démonstration : 12 cas pour 4 documents. Sur un
-# corpus réel, viser 30 cas MINIMUM, et surtout des questions réellement posées
-# par les utilisateurs — pas des questions écrites en regardant les documents,
-# qui reprennent leur vocabulaire et flattent artificiellement le score.
+# Les questions sont écrites dans le vocabulaire d'un collaborateur, PAS dans
+# celui des documents. Un jeu rédigé en recopiant les termes des documents
+# mesure la capacité à retrouver des mots, pas à répondre à une question.
 
-# --- Questions publiques ------------------------------------------------------
 
-- question: Combien de jours de télétravail puis-je prendre par semaine ?
+# --- 93 cas positifs --------------------------------------------------
+
+- question: "Un client a fait des travaux qui ne sont pas dans la liste de ses activités, est-ce que la décennale marche quand même ?"
   groups: [public]
-  expect: [public/charte-teletravail.md]
-
-- question: Quel jour tout le monde doit-il être présent au bureau ?
+  expect:
+    - public/produits/cg-decennale-artemis.md
+    - public/produits/cg-decennale-norvalis.md
+    - public/produits/cg-decennale-mutuas.md
+    - public/produits/cg-decennale-orlane.md
+  note: "exclusion « travaux réalisés en dehors des activités déclarées »"
+- question: "On a combien de temps pour prévenir l'assureur après un cambriolage ?"
   groups: [public]
-  expect: [public/charte-teletravail.md]
-
-- question: Est-ce que l'entreprise rembourse ma connexion internet ?
+  expect:
+    - public/produits/cg-rc_pro-artemis.md
+    - public/produits/cg-rc_pro-norvalis.md
+    - public/produits/cg-rc_pro-mutuas.md
+    - public/produits/cg-rc_pro-orlane.md
+    - public/produits/cg-mrp-artemis.md
+    - public/produits/cg-mrp-norvalis.md
+    - public/produits/cg-mrp-mutuas.md
+    - public/produits/cg-mrp-orlane.md
+    - public/produits/cg-flotte-artemis.md
+    - public/produits/cg-flotte-norvalis.md
+    - public/produits/cg-flotte-mutuas.md
+    - public/produits/cg-flotte-orlane.md
+    - public/produits/cg-decennale-artemis.md
+    - public/produits/cg-decennale-norvalis.md
+    - public/produits/cg-decennale-mutuas.md
+    - public/produits/cg-decennale-orlane.md
+    - public/produits/cg-cyber-artemis.md
+    - public/produits/cg-cyber-norvalis.md
+    - public/produits/cg-cyber-mutuas.md
+    - public/produits/cg-cyber-orlane.md
+    - public/produits/cg-dab-artemis.md
+    - public/produits/cg-dab-norvalis.md
+    - public/produits/cg-dab-mutuas.md
+    - public/produits/cg-dab-orlane.md
+  note: "délai de déclaration réduit pour le vol"
+- question: "Au bout de combien de temps un client ne peut plus rien réclamer sur son contrat ?"
   groups: [public]
-  expect: [public/charte-teletravail.md]
-
-- question: Quel est le montant de l'indemnité de télétravail ?
+  expect:
+    - public/produits/cg-rc_pro-artemis.md
+    - public/produits/cg-rc_pro-norvalis.md
+    - public/produits/cg-rc_pro-mutuas.md
+    - public/produits/cg-rc_pro-orlane.md
+    - public/produits/cg-mrp-artemis.md
+    - public/produits/cg-mrp-norvalis.md
+    - public/produits/cg-mrp-mutuas.md
+    - public/produits/cg-mrp-orlane.md
+    - public/produits/cg-flotte-artemis.md
+    - public/produits/cg-flotte-norvalis.md
+    - public/produits/cg-flotte-mutuas.md
+    - public/produits/cg-flotte-orlane.md
+    - public/produits/cg-decennale-artemis.md
+    - public/produits/cg-decennale-norvalis.md
+    - public/produits/cg-decennale-mutuas.md
+    - public/produits/cg-decennale-orlane.md
+    - public/produits/cg-cyber-artemis.md
+    - public/produits/cg-cyber-norvalis.md
+    - public/produits/cg-cyber-mutuas.md
+    - public/produits/cg-cyber-orlane.md
+    - public/produits/cg-dab-artemis.md
+    - public/produits/cg-dab-norvalis.md
+    - public/produits/cg-dab-mutuas.md
+    - public/produits/cg-dab-orlane.md
+  note: "prescription biennale L.114-1"
+- question: "Quel préavis pour ne pas repartir un an de plus ?"
   groups: [public]
-  expect: [public/charte-teletravail.md]
-
-- question: Combien de temps faut-il pour obtenir un accès à un outil interne ?
+  expect:
+    - public/produits/cg-rc_pro-artemis.md
+    - public/produits/cg-rc_pro-norvalis.md
+    - public/produits/cg-rc_pro-mutuas.md
+    - public/produits/cg-rc_pro-orlane.md
+    - public/produits/cg-mrp-artemis.md
+    - public/produits/cg-mrp-norvalis.md
+    - public/produits/cg-mrp-mutuas.md
+    - public/produits/cg-mrp-orlane.md
+    - public/produits/cg-flotte-artemis.md
+    - public/produits/cg-flotte-norvalis.md
+    - public/produits/cg-flotte-mutuas.md
+    - public/produits/cg-flotte-orlane.md
+    - public/produits/cg-decennale-artemis.md
+    - public/produits/cg-decennale-norvalis.md
+    - public/produits/cg-decennale-mutuas.md
+    - public/produits/cg-decennale-orlane.md
+    - public/produits/cg-cyber-artemis.md
+    - public/produits/cg-cyber-norvalis.md
+    - public/produits/cg-cyber-mutuas.md
+    - public/produits/cg-cyber-orlane.md
+    - public/produits/cg-dab-artemis.md
+    - public/produits/cg-dab-norvalis.md
+    - public/produits/cg-dab-mutuas.md
+    - public/produits/cg-dab-orlane.md
+  note: "préavis de résiliation à échéance"
+- question: "Si le serveur du client n'a pas été mis à jour depuis un an, il est couvert en cas de piratage ?"
   groups: [public]
-  expect: [public/procedure-acces-outils.md]
-
-- question: Au bout de combien de temps un accès temporaire expire-t-il ?
+  expect:
+    - public/produits/cg-cyber-artemis.md
+    - public/produits/cg-cyber-norvalis.md
+    - public/produits/cg-cyber-mutuas.md
+    - public/produits/cg-cyber-orlane.md
+  note: "exclusion cyber sur les systèmes non maintenus"
+- question: "Est-ce que l'assurance paie si on verse la rançon nous-mêmes ?"
   groups: [public]
-  expect: [public/procedure-acces-outils.md]
-
-- question: Qui contacter si mon compte est compromis ?
+  expect:
+    - public/produits/cg-cyber-artemis.md
+    - public/produits/cg-cyber-norvalis.md
+    - public/produits/cg-cyber-mutuas.md
+    - public/produits/cg-cyber-orlane.md
+  note: "exclusion rançon sans accord préalable"
+- question: "Le client a livré un chantier et le carrelage est moche mais tient bien, c'est pris en charge ?"
   groups: [public]
-  expect: [public/procedure-acces-outils.md]
+  expect:
+    - public/produits/cg-decennale-norvalis.md
+    - public/produits/cg-decennale-artemis.md
+    - public/produits/cg-decennale-norvalis.md
+    - public/produits/cg-decennale-mutuas.md
+    - public/produits/cg-decennale-orlane.md
+  note: "exclusion des désordres purement esthétiques"
+- question: "Que se passe-t-il si le client a embauché du monde sans nous le dire ?"
+  groups: [public]
+  expect:
+    - public/produits/cg-rc_pro-artemis.md
+    - public/produits/cg-rc_pro-norvalis.md
+    - public/produits/cg-rc_pro-mutuas.md
+    - public/produits/cg-rc_pro-orlane.md
+    - public/produits/cg-mrp-artemis.md
+    - public/produits/cg-mrp-norvalis.md
+    - public/produits/cg-mrp-mutuas.md
+    - public/produits/cg-mrp-orlane.md
+    - public/produits/cg-flotte-artemis.md
+    - public/produits/cg-flotte-norvalis.md
+    - public/produits/cg-flotte-mutuas.md
+    - public/produits/cg-flotte-orlane.md
+    - public/produits/cg-decennale-artemis.md
+    - public/produits/cg-decennale-norvalis.md
+    - public/produits/cg-decennale-mutuas.md
+    - public/produits/cg-decennale-orlane.md
+    - public/produits/cg-cyber-artemis.md
+    - public/produits/cg-cyber-norvalis.md
+    - public/produits/cg-cyber-mutuas.md
+    - public/produits/cg-cyber-orlane.md
+    - public/produits/cg-dab-artemis.md
+    - public/produits/cg-dab-norvalis.md
+    - public/produits/cg-dab-mutuas.md
+    - public/produits/cg-dab-orlane.md
+  note: "règle proportionnelle en cas de non-déclaration d'aggravation"
+- question: "Un conducteur bourré au volant, ça passe en flotte ?"
+  groups: [public]
+  expect:
+    - public/produits/cg-flotte-artemis.md
+    - public/produits/cg-flotte-norvalis.md
+    - public/produits/cg-flotte-mutuas.md
+    - public/produits/cg-flotte-orlane.md
+  note: "exclusion état alcoolique"
+- question: "Le client stocke des palettes dehors, elles sont assurées contre le vol ?"
+  groups: [public]
+  expect:
+    - public/produits/cg-mrp-artemis.md
+    - public/produits/cg-mrp-norvalis.md
+    - public/produits/cg-mrp-mutuas.md
+    - public/produits/cg-mrp-orlane.md
+  note: "exclusion marchandises stockées à l'extérieur"
+- question: "Un client râle parce qu'on a mis trois semaines à lui répondre, on a combien de temps pour lui accuser réception ?"
+  groups: [public]
+  expect:
+    - public/procedures/reclamations.md
+- question: "Qu'est-ce qu'il faut absolument garder par écrit pour se couvrir si le client nous reproche de l'avoir mal orienté ?"
+  groups: [public]
+  expect:
+    - public/procedures/devoir-de-conseil.md
+- question: "On peut sortir une attestation à quelqu'un qui n'a pas payé ?"
+  groups: [public]
+  expect:
+    - public/procedures/attestations.md
+    - public/procedures/encaissement.md
+- question: "Combien de temps garde-t-on le dossier d'un prospect qui n'a jamais signé ?"
+  groups: [public]
+  expect:
+    - public/procedures/rgpd-conservation.md
+- question: "Le client me demande si son sinistre est couvert, je réponds quoi ?"
+  groups: [public]
+  expect:
+    - public/procedures/declaration-sinistre.md
+- question: "Quels papiers demander quand quelqu'un veut rajouter une camionnette ?"
+  groups: [public]
+  expect:
+    - public/procedures/pieces-par-demande.md
+    - public/procedures/avenants.md
+- question: "Il manque quoi typiquement pour monter un dossier neuf en entreprise ?"
+  groups: [public]
+  expect:
+    - public/procedures/souscription-nouvelle-affaire.md
+    - public/procedures/pieces-par-demande.md
+  note: "le relevé de sinistralité est la pièce manquante récurrente"
+- question: "Le véhicule roule-t-il assuré tant que la compagnie n'a pas renvoyé l'avenant ?"
+  groups: [public]
+  expect:
+    - public/procedures/avenants.md
+- question: "Au bout de combien de temps la garantie saute quand quelqu'un ne paie plus ?"
+  groups: [public]
+  expect:
+    - public/procedures/encaissement.md
+- question: "Quelle compagnie est la plus rapide pour sortir une attestation ?"
+  groups: [public]
+  expect:
+    - public/procedures/annuaire-compagnies.md
+- question: "Qui vérifie-t-on exactement quand une société entre en portefeuille ?"
+  groups: [public]
+  expect:
+    - public/procedures/lcb-ft.md
+  note: "bénéficiaire effectif au-delà de 25 %"
+- question: "Pourquoi on rate des préavis de résiliation ?"
+  groups: [public]
+  expect:
+    - public/procedures/resiliation-echeance.md
+  note: "confusion entre date anniversaire et échéance principale"
+- question: "Il reste combien à la charge de Bativert en cas de pépin sur décennale ?"
+  groups: [gestion, public]
+  expect:
+    - gestion/contrats/dec-2024-0117-bativert.md
+  fact: "1 500 €"
+  note: "angle : franchise"
+- question: "On paie combien par an pour RC Pro chez Bativert ?"
+  groups: [gestion, public]
+  expect:
+    - gestion/contrats/rcp-2024-0118-bativert.md
+  fact: "2 160 €"
+  note: "angle : prime"
+- question: "Quand tombe le renouvellement de MRP pour Bativert ?"
+  groups: [gestion, public]
+  expect:
+    - gestion/contrats/mrp-2025-0342-bativert.md
+  fact: "1er septembre"
+  note: "angle : echeance"
+- question: "Quel assureur porte le contrat flotte auto de Tourneix Transports ?"
+  groups: [gestion, public]
+  expect:
+    - gestion/contrats/fla-2023-0088-tourneix.md
+  fact: "Artémis Assurances"
+  note: "angle : compagnie"
+- question: "C'est quel numéro de dossier, RC Pro chez Tourneix Transports ?"
+  groups: [gestion, public]
+  expect:
+    - gestion/contrats/rcp-2023-0089-tourneix.md
+  fact: "RCP-2023-0089"
+  note: "angle : reference"
+- question: "Il reste combien à la charge de Tourneix Transports en cas de pépin sur MRP ?"
+  groups: [gestion, public]
+  expect:
+    - gestion/contrats/mrp-2023-0090-tourneix.md
+  fact: "1 500 €"
+  note: "angle : franchise"
+- question: "On paie combien par an pour MRP chez Lumigraph ?"
+  groups: [gestion, public]
+  expect:
+    - gestion/contrats/mrp-2025-0401-lumigraph.md
+  fact: "4 180 €"
+  note: "angle : prime"
+- question: "Quand tombe le renouvellement de dommages aux biens pour Lumigraph ?"
+  groups: [gestion, public]
+  expect:
+    - gestion/contrats/dab-2025-0402-lumigraph.md
+  fact: "1er janvier"
+  note: "angle : echeance"
+- question: "Quel assureur porte le contrat cyber de Lumigraph ?"
+  groups: [gestion, public]
+  expect:
+    - gestion/contrats/cyb-2026-0511-lumigraph.md
+  fact: "Orlane Risques Spéciaux"
+  note: "angle : compagnie"
+- question: "C'est quel numéro de dossier, RC Pro chez Ergomed Conseil ?"
+  groups: [gestion, public]
+  expect:
+    - gestion/contrats/rcp-2025-0233-ergomed.md
+  fact: "RCP-2025-0233"
+  note: "angle : reference"
+- question: "Il reste combien à la charge de Ergomed Conseil en cas de pépin sur MRP ?"
+  groups: [gestion, public]
+  expect:
+    - gestion/contrats/mrp-2025-0234-ergomed.md
+  fact: "400 €"
+  note: "angle : franchise"
+- question: "On paie combien par an pour MRP chez Le Pétrin D'Orvault ?"
+  groups: [gestion, public]
+  expect:
+    - gestion/contrats/mrp-2024-0295-petrin.md
+  fact: "5 310 €"
+  note: "angle : prime"
+- question: "Quand tombe le renouvellement de dommages aux biens pour Le Pétrin D'Orvault ?"
+  groups: [gestion, public]
+  expect:
+    - gestion/contrats/dab-2024-0296-petrin.md
+  fact: "1er novembre"
+  note: "angle : echeance"
+- question: "Quel assureur porte le contrat RC Pro de Novaflux ?"
+  groups: [gestion, public]
+  expect:
+    - gestion/contrats/rcp-2025-0455-novaflux.md
+  fact: "Orlane Risques Spéciaux"
+  note: "angle : compagnie"
+- question: "C'est quel numéro de dossier, cyber chez Novaflux ?"
+  groups: [gestion, public]
+  expect:
+    - gestion/contrats/cyb-2025-0456-novaflux.md
+  fact: "CYB-2025-0456"
+  note: "angle : reference"
+- question: "Il reste combien à la charge de Novaflux en cas de pépin sur MRP ?"
+  groups: [gestion, public]
+  expect:
+    - gestion/contrats/mrp-2025-0457-novaflux.md
+  fact: "750 €"
+  note: "angle : franchise"
+- question: "On paie combien par an pour décennale chez Plomberie Chapuis ?"
+  groups: [gestion, public]
+  expect:
+    - gestion/contrats/dec-2025-0188-chapuis.md
+  fact: "4 620 €"
+  note: "angle : prime"
+- question: "Quand tombe le renouvellement de RC Pro pour Plomberie Chapuis ?"
+  groups: [gestion, public]
+  expect:
+    - gestion/contrats/rcp-2025-0189-chapuis.md
+  fact: "1er mai"
+  note: "angle : echeance"
+- question: "Quel assureur porte le contrat RC Pro de Agence La Marelle ?"
+  groups: [gestion, public]
+  expect:
+    - gestion/contrats/rcp-2024-0212-marelle.md
+  fact: "Artémis Assurances"
+  note: "angle : compagnie"
+- question: "C'est quel numéro de dossier, MRP chez Agence La Marelle ?"
+  groups: [gestion, public]
+  expect:
+    - gestion/contrats/mrp-2024-0213-marelle.md
+  fact: "MRP-2024-0213"
+  note: "angle : reference"
+- question: "Il reste combien à la charge de Agence La Marelle en cas de pépin sur cyber ?"
+  groups: [gestion, public]
+  expect:
+    - gestion/contrats/cyb-2026-0530-marelle.md
+  fact: "3 000 €"
+  note: "angle : franchise"
+- question: "On paie combien par an pour dommages aux biens chez Fermetal Industrie ?"
+  groups: [gestion, public]
+  expect:
+    - gestion/contrats/dab-2023-0061-fermetal.md
+  fact: "18 400 €"
+  note: "angle : prime"
+- question: "Quand tombe le renouvellement de RC Pro pour Fermetal Industrie ?"
+  groups: [gestion, public]
+  expect:
+    - gestion/contrats/rcp-2023-0062-fermetal.md
+  fact: "1er octobre"
+  note: "angle : echeance"
+- question: "Quel assureur porte le contrat flotte auto de Fermetal Industrie ?"
+  groups: [gestion, public]
+  expect:
+    - gestion/contrats/fla-2024-0301-fermetal.md
+  fact: "Norvalis IARD"
+  note: "angle : compagnie"
+- question: "C'est quel numéro de dossier, décennale chez Fermetal Industrie ?"
+  groups: [gestion, public]
+  expect:
+    - gestion/contrats/dec-2023-0063-fermetal.md
+  fact: "DEC-2023-0063"
+  note: "angle : reference"
+- question: "Il reste combien à la charge de Le Sablier en cas de pépin sur MRP ?"
+  groups: [gestion, public]
+  expect:
+    - gestion/contrats/mrp-2025-0366-sablier.md
+  fact: "700 €"
+  note: "angle : franchise"
+- question: "On paie combien par an pour RC Pro chez Le Sablier ?"
+  groups: [gestion, public]
+  expect:
+    - gestion/contrats/rcp-2025-0367-sablier.md
+  fact: "1 640 €"
+  note: "angle : prime"
+- question: "Quand tombe le renouvellement de décennale pour Voltis Électricité ?"
+  groups: [gestion, public]
+  expect:
+    - gestion/contrats/dec-2024-0144-voltis.md
+  fact: "1er juin"
+  note: "angle : echeance"
+- question: "Quel assureur porte le contrat RC Pro de Voltis Électricité ?"
+  groups: [gestion, public]
+  expect:
+    - gestion/contrats/rcp-2024-0145-voltis.md
+  fact: "Artémis Assurances"
+  note: "angle : compagnie"
+- question: "C'est quel numéro de dossier, flotte auto chez Voltis Électricité ?"
+  groups: [gestion, public]
+  expect:
+    - gestion/contrats/fla-2025-0390-voltis.md
+  fact: "FLA-2025-0390"
+  note: "angle : reference"
+- question: "Il reste combien à la charge de Hexatri Environnement en cas de pépin sur flotte auto ?"
+  groups: [gestion, public]
+  expect:
+    - gestion/contrats/fla-2024-0277-hexatri.md
+  fact: "1 500 €"
+  note: "angle : franchise"
+- question: "On paie combien par an pour RC Pro chez Hexatri Environnement ?"
+  groups: [gestion, public]
+  expect:
+    - gestion/contrats/rcp-2024-0278-hexatri.md
+  fact: "9 200 €"
+  note: "angle : prime"
+- question: "Quand tombe le renouvellement de dommages aux biens pour Hexatri Environnement ?"
+  groups: [gestion, public]
+  expect:
+    - gestion/contrats/dab-2024-0279-hexatri.md
+  fact: "1er septembre"
+  note: "angle : echeance"
+- question: "Quel assureur porte le contrat RC Pro de Calliope Formation ?"
+  groups: [gestion, public]
+  expect:
+    - gestion/contrats/rcp-2026-0602-calliope.md
+  fact: "Mutuas Professionnels"
+  note: "angle : compagnie"
+- question: "C'est quel numéro de dossier, MRP chez Calliope Formation ?"
+  groups: [gestion, public]
+  expect:
+    - gestion/contrats/mrp-2026-0603-calliope.md
+  fact: "MRP-2026-0603"
+  note: "angle : reference"
+- question: "Il reste combien à la charge de Garage Ducastel en cas de pépin sur RC Pro ?"
+  groups: [gestion, public]
+  expect:
+    - gestion/contrats/rcp-2025-0318-garageduc.md
+  fact: "900 €"
+  note: "angle : franchise"
+- question: "On paie combien par an pour MRP chez Garage Ducastel ?"
+  groups: [gestion, public]
+  expect:
+    - gestion/contrats/mrp-2025-0319-garageduc.md
+  fact: "3 980 €"
+  note: "angle : prime"
+- question: "Quand tombe le renouvellement de flotte auto pour Garage Ducastel ?"
+  groups: [gestion, public]
+  expect:
+    - gestion/contrats/fla-2025-0320-garageduc.md
+  fact: "1er août"
+  note: "angle : echeance"
+- question: "Le camion GK-771-VB, il est bien rentré dans la flotte de Tourneix ?"
+  groups: [gestion, public]
+  expect:
+    - gestion/avenants/av-2026-0001-tourneix-flotte.md
+- question: "Est-ce que Bativert peut faire de l'isolation par l'extérieur maintenant ?"
+  groups: [gestion, public]
+  expect:
+    - gestion/avenants/av-2026-0003-bativert-decennale.md
+- question: "Pourquoi la cotisation de la boulangerie d'Orvault a augmenté ?"
+  groups: [gestion, public]
+  expect:
+    - gestion/avenants/av-2026-0006-petrin-mrp.md
+- question: "Chapuis a le droit de poser des pompes à chaleur ?"
+  groups: [gestion, public]
+  expect:
+    - gestion/avenants/av-2026-0017-chapuis-decennale.md
+  note: "extension air/eau, géothermie toujours exclue"
+- question: "Voltis peut installer des bornes rapides au-delà de 22 kW ?"
+  groups: [gestion, public]
+  expect:
+    - gestion/avenants/av-2026-0010-voltis-decennale.md
+- question: "La franchise de Lumigraph sur le vol a bougé après le cambriolage ?"
+  groups: [gestion, public]
+  expect:
+    - gestion/avenants/av-2026-0014-lumigraph-mrp.md
+- question: "L'agence immobilière fait du syndic maintenant, c'est déclaré ?"
+  groups: [gestion, public]
+  expect:
+    - gestion/avenants/av-2026-0015-marelle-rc_pro.md
+- question: "Qu'est-ce que l'assureur a exigé de Lumigraph après le chiffrement ?"
+  groups: [gestion, public]
+  expect:
+    - gestion/avenants/av-2026-0018-lumigraph-cyber.md
+- question: "L'expert a dit quoi sur l'origine de la fissure chez le maçon ?"
+  groups: [sinistres, public]
+  expect:
+    - sinistres/expertises/exp-2026-0003-bativert.md
+  note: "tassement différentiel, ancrage insuffisant"
+- question: "Pourquoi les sauvegardes de l'imprimeur n'ont pas servi ?"
+  groups: [sinistres, public]
+  expect:
+    - sinistres/expertises/exp-2026-0002-lumigraph.md
+  note: "NAS monté en permanence, chiffré avec le reste"
+- question: "Qu'est-ce qui a mis le feu à la benne ?"
+  groups: [sinistres, public]
+  expect:
+    - sinistres/expertises/exp-2026-0005-hexatri.md
+  note: "batterie lithium dans le flux d'OM"
+- question: "Où en est le dossier du dégât des eaux chez le maçon ?"
+  groups: [sinistres, public]
+  expect:
+    - sinistres/declarations/sin-2026-0041-bativert.md
+- question: "Combien nous coûte l'histoire du chiffrement chez l'imprimeur ?"
+  groups: [sinistres, public]
+  expect:
+    - sinistres/declarations/sin-2026-0067-lumigraph.md
+- question: "Le camion poubelle qui a pris feu, on sait pourquoi ?"
+  groups: [sinistres, public]
+  expect:
+    - sinistres/declarations/sin-2026-0090-hexatri.md
+  note: "chargement d'un déchet non conforme"
+- question: "Quel expert suit la fissure de la maison livrée en 2023 ?"
+  groups: [sinistres, public]
+  expect:
+    - sinistres/declarations/sin-2025-0388-bativert.md
+- question: "La boulangerie a perdu tout son stock congelé, c'est réglé ?"
+  groups: [sinistres, public]
+  expect:
+    - sinistres/declarations/sin-2026-0103-petrin.md
+- question: "Un client de Novaflux les attaque sur une mise à jour ratée, on en est où ?"
+  groups: [sinistres, public]
+  expect:
+    - sinistres/declarations/sin-2026-0112-novaflux.md
+- question: "L'alarme était branchée le soir du cambriolage chez l'imprimeur ?"
+  groups: [sinistres, public]
+  expect:
+    - sinistres/declarations/sin-2026-0125-lumigraph.md
+  note: "l'alarme n'était pas armée — point de discussion avec l'assureur"
+- question: "Il manque quoi pour transformer le devis du charpentier de Clisson ?"
+  groups: [production, public]
+  expect:
+    - production/propositions/dev-2026-0006-vignoble.md
+- question: "On a proposé combien au studio de dev pour le cyber ?"
+  groups: [production, public]
+  expect:
+    - production/propositions/dev-2026-0004-studio.md
+- question: "Pourquoi on n'a pas mis de protection juridique au paysagiste ?"
+  groups: [production, public]
+  expect:
+    - production/propositions/dev-2026-0002-paysage.md
+- question: "On touche combien de commission chez Mutuas ?"
+  groups: [direction]
+  expect:
+    - direction/commissions-2026.md
+- question: "À partir de quel montant il faut deux signatures pour engager une dépense ?"
+  groups: [direction]
+  expect:
+    - direction/budget-cabinet-2026.md
+- question: "Jusqu'à combien de véhicules on peut souscrire tout seul chez Artémis ?"
+  groups: [direction]
+  expect:
+    - direction/convention-artemis.md
+- question: "On peut régler un petit sinistre sans passer par la compagnie ?"
+  groups: [direction]
+  expect:
+    - direction/convention-artemis.md
+- question: "Qu'est-ce qu'on a demandé au maçon après son dégât des eaux ?"
+  groups: [gestion, public]
+  expect:
+    - gestion/emails/thr-2026-0001-bativert.md
+- question: "Qu'est-ce qu'on a dit à l'imprimeur de faire tout de suite quand il s'est fait chiffrer ?"
+  groups: [gestion, public]
+  expect:
+    - gestion/emails/thr-2026-0003-lumigraph.md
+  note: "débrancher, ne rien éteindre, ne rien payer"
+- question: "Le boulanger voulait son attestation pour quoi déjà ?"
+  groups: [gestion, public]
+  expect:
+    - gestion/emails/thr-2026-0004-petrin.md
+- question: "Qu'est-ce qu'on a répondu à Novaflux quand leur client les a mis en cause ?"
+  groups: [gestion, public]
+  expect:
+    - gestion/emails/thr-2026-0005-novaflux.md
+  note: "ne rien reconnaître, même oralement"
+- question: "Le restaurant de La Baule a été indemnisé de combien pour sa vitrine ?"
+  groups: [gestion, public]
+  expect:
+    - gestion/emails/thr-2026-0006-sablier.md
+- question: "L'alarme de température de la chambre froide était branchée ?"
+  groups: [gestion, public]
+  expect:
+    - gestion/emails/thr-2026-0015-petrin.md
+- question: "Il manquait quoi pour rajouter le camion de Tourneix ?"
+  groups: [gestion, public]
+  expect:
+    - gestion/emails/thr-2026-0002-tourneix.md
+- question: "Le garage voulait monter sa couverture véhicules confiés, on a dit oui ?"
+  groups: [gestion, public]
+  expect:
+    - gestion/emails/thr-2026-0008-garageduc.md
 
-# --- Questions réservées au groupe finance ------------------------------------
+# --- 35 négatifs difficiles --------------------------------------------
 
-- question: Quelle est l'enveloppe budgétaire pour l'outillage cette année ?
-  groups: [finance, public]
-  expect: [finance/budget-outillage-2026.md]
-
-- question: À partir de quel montant faut-il une double validation ?
-  groups: [finance, public]
-  expect: [finance/budget-outillage-2026.md]
-
-- question: Quand les engagements budgétaires sont-ils gelés en fin d'année ?
-  groups: [finance, public]
-  expect: [finance/budget-outillage-2026.md]
-
-# --- Questions réservées au groupe RH -----------------------------------------
-
-- question: Combien de jours de congés j'acquiers par mois ?
-  groups: [rh, public]
-  expect: [rh/procedure-conges.md]
-
-- question: Que deviennent mes congés non pris à la fin de la période ?
-  groups: [rh, public]
-  expect: [rh/procedure-conges.md]
+- question: "Quel est le tarif de la garantie perte de licence pour les pilotes de ligne ?"
+  groups: [public, gestion, production, sinistres]
+  expect: []
+  abstain: true
+  note: "produit inexistant au portefeuille"
+- question: "Quelles sont nos conditions en assurance-vie et capitalisation ?"
+  groups: [public, gestion, direction]
+  expect: []
+  abstain: true
+  note: "le cabinet ne fait que de l'IARD professionnel"
+- question: "Combien coûte la mutuelle santé collective chez Artémis ?"
+  groups: [public, gestion, direction]
+  expect: []
+  abstain: true
+  note: "branche santé absente du corpus"
+- question: "Quel est le barème d'indemnisation des accidents du travail de nos clients ?"
+  groups: [public, sinistres]
+  expect: []
+  abstain: true
+  note: "relève de la sécurité sociale, pas du portefeuille"
+- question: "Quelle est la procédure pour assurer un drone professionnel ?"
+  groups: [public, production]
+  expect: []
+  abstain: true
+  note: "aucune procédure ni produit drone"
+- question: "Quel est le montant de la garantie financière de La Marelle ?"
+  groups: [gestion, public]
+  expect: []
+  abstain: true
+  note: "explicitement souscrite ailleurs, montant non documenté"
+- question: "Quels sont les résultats du cabinet au premier trimestre 2026 ?"
+  groups: [direction]
+  expect: []
+  abstain: true
+  note: "aucun document de résultat dans le corpus"
+- question: "Quelle est la politique de télétravail du cabinet ?"
+  groups: [public, gestion]
+  expect: []
+  abstain: true
+  note: "sujet RH absent — c'est le corpus de l'ancien POC"
+- question: "Quelle est la franchise flotte auto de Plomberie Chapuis ?"
+  groups: [gestion, public]
+  expect: []
+  abstain: true
+  note: "EURL PLOMBERIE CHAPUIS n'a aucun contrat Flotte Automobile — le corpus contient ce produit pour d'autres clients"
+- question: "Quel est le plafond décennale souscrit pour Novaflux ?"
+  groups: [gestion, public]
+  expect: []
+  abstain: true
+  note: "SAS NOVAFLUX n'a aucun contrat Responsabilité Civile Décennale — le corpus contient ce produit pour d'autres clients"
+- question: "Combien coûte le contrat RC Pro de Lumigraph ?"
+  groups: [gestion, public]
+  expect: []
+  abstain: true
+  note: "SARL LUMIGRAPH n'a aucun contrat Responsabilité Civile Professionnelle — le corpus contient ce produit pour d'autres clients"
+- question: "Quelle compagnie porte la décennale de Hexatri Environnement ?"
+  groups: [gestion, public]
+  expect: []
+  abstain: true
+  note: "SAS HEXATRI ENVIRONNEMENT n'a aucun contrat Responsabilité Civile Décennale — le corpus contient ce produit pour d'autres clients"
+- question: "Quand tombe l'échéance flotte auto de Le Sablier ?"
+  groups: [gestion, public]
+  expect: []
+  abstain: true
+  note: "SARL LE SABLIER n'a aucun contrat Flotte Automobile — le corpus contient ce produit pour d'autres clients"
+- question: "Quelle est la franchise décennale de Tourneix Transports ?"
+  groups: [gestion, public]
+  expect: []
+  abstain: true
+  note: "SAS TOURNEIX TRANSPORTS n'a aucun contrat Responsabilité Civile Décennale — le corpus contient ce produit pour d'autres clients"
+- question: "Quel est le plafond MRP souscrit pour Hexatri Environnement ?"
+  groups: [gestion, public]
+  expect: []
+  abstain: true
+  note: "SAS HEXATRI ENVIRONNEMENT n'a aucun contrat Multirisque Professionnelle — le corpus contient ce produit pour d'autres clients"
+- question: "Combien coûte le contrat décennale de Agence La Marelle ?"
+  groups: [gestion, public]
+  expect: []
+  abstain: true
+  note: "SAS AGENCE LA MARELLE n'a aucun contrat Responsabilité Civile Décennale — le corpus contient ce produit pour d'autres clients"
+- question: "Quelle compagnie porte la cyber de Ergomed Conseil ?"
+  groups: [gestion, public]
+  expect: []
+  abstain: true
+  note: "SELARL ERGOMED CONSEIL n'a aucun contrat Cyber-risques — le corpus contient ce produit pour d'autres clients"
+- question: "Quand tombe l'échéance RC Pro de Le Pétrin D'Orvault ?"
+  groups: [gestion, public]
+  expect: []
+  abstain: true
+  note: "SARL LE PÉTRIN D'ORVAULT n'a aucun contrat Responsabilité Civile Professionnelle — le corpus contient ce produit pour d'autres clients"
+- question: "Quelle est la franchise dommages aux biens de Ergomed Conseil ?"
+  groups: [gestion, public]
+  expect: []
+  abstain: true
+  note: "SELARL ERGOMED CONSEIL n'a aucun contrat Dommages aux Biens — le corpus contient ce produit pour d'autres clients"
+- question: "Quel est le plafond flotte auto souscrit pour Lumigraph ?"
+  groups: [gestion, public]
+  expect: []
+  abstain: true
+  note: "SARL LUMIGRAPH n'a aucun contrat Flotte Automobile — le corpus contient ce produit pour d'autres clients"
+- question: "Combien coûte le contrat cyber de Le Sablier ?"
+  groups: [gestion, public]
+  expect: []
+  abstain: true
+  note: "SARL LE SABLIER n'a aucun contrat Cyber-risques — le corpus contient ce produit pour d'autres clients"
+- question: "Quelle compagnie porte la décennale de Ergomed Conseil ?"
+  groups: [gestion, public]
+  expect: []
+  abstain: true
+  note: "SELARL ERGOMED CONSEIL n'a aucun contrat Responsabilité Civile Décennale — le corpus contient ce produit pour d'autres clients"
+- question: "Quand tombe l'échéance cyber de Calliope Formation ?"
+  groups: [gestion, public]
+  expect: []
+  abstain: true
+  note: "SARL CALLIOPE FORMATION n'a aucun contrat Cyber-risques — le corpus contient ce produit pour d'autres clients"
+- question: "Quelle est la franchise flotte auto de Novaflux ?"
+  groups: [gestion, public]
+  expect: []
+  abstain: true
+  note: "SAS NOVAFLUX n'a aucun contrat Flotte Automobile — le corpus contient ce produit pour d'autres clients"
+- question: "Quel est le plafond dommages aux biens souscrit pour Plomberie Chapuis ?"
+  groups: [gestion, public]
+  expect: []
+  abstain: true
+  note: "EURL PLOMBERIE CHAPUIS n'a aucun contrat Dommages aux Biens — le corpus contient ce produit pour d'autres clients"
+- question: "Combien coûte le contrat MRP de Voltis Électricité ?"
+  groups: [gestion, public]
+  expect: []
+  abstain: true
+  note: "SAS VOLTIS ÉLECTRICITÉ n'a aucun contrat Multirisque Professionnelle — le corpus contient ce produit pour d'autres clients"
+- question: "Quelle compagnie porte la flotte auto de Bativert ?"
+  groups: [gestion, public]
+  expect: []
+  abstain: true
+  note: "SARL BATIVERT n'a aucun contrat Flotte Automobile — le corpus contient ce produit pour d'autres clients"
+- question: "Quand tombe l'échéance flotte auto de Calliope Formation ?"
+  groups: [gestion, public]
+  expect: []
+  abstain: true
+  note: "SARL CALLIOPE FORMATION n'a aucun contrat Flotte Automobile — le corpus contient ce produit pour d'autres clients"
+- question: "Quelle est la franchise du contrat MRP-2025-0999 ?"
+  groups: [gestion, sinistres, public]
+  expect: []
+  abstain: true
+  note: "référence de contrat inexistante"
+- question: "Où en est le sinistre SIN-2026-0400 ?"
+  groups: [gestion, sinistres, public]
+  expect: []
+  abstain: true
+  note: "référence de sinistre inexistante"
+- question: "Quels contrats a la SARL BOULANGERIE MERCIER ?"
+  groups: [gestion, sinistres, public]
+  expect: []
+  abstain: true
+  note: "client inexistant au portefeuille"
+- question: "Quelle est l'échéance du contrat de la SAS TRANSPORTS LEGENDRE ?"
+  groups: [gestion, sinistres, public]
+  expect: []
+  abstain: true
+  note: "client inexistant au portefeuille"
+- question: "Quel avenant a été passé sur le contrat DEC-2019-0001 ?"
+  groups: [gestion, sinistres, public]
+  expect: []
+  abstain: true
+  note: "aucun contrat antérieur à 2023 dans le corpus"
+- question: "Quel était le tarif de la flotte Tourneix en 2019 ?"
+  groups: [gestion, sinistres, public]
+  expect: []
+  abstain: true
+  note: "le contrat existe mais aucune donnée tarifaire avant 2023"
+- question: "Combien de sinistres a déclaré Calliope Formation ?"
+  groups: [gestion, sinistres, public]
+  expect: []
+  abstain: true
+  note: "aucun sinistre pour ce client — l'absence est une réponse"
