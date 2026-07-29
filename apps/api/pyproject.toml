@@ -1,7 +1,7 @@
 [project]
-name = "langgraph-poc-api"
+name = "langchain-api"
 version = "0.1.0"
-description = "Agent LangGraph à outils gratuits, streamé au protocole AI SDK"
+description = "RAG moderne et agent à outils LangChain, streamé au protocole AI SDK"
 requires-python = ">=3.12"
 
 dependencies = [

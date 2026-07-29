@@ -1,6 +1,5 @@
-# Nom du projet compose — conservé tel quel pour ne pas orpheliner les volumes
-# existants (le dépôt GitHub, lui, s'appelle langgraph-agent-assistant-ui).
-name: langgraph-poc
+# Identité Docker alignée sur le nom public du projet.
+name: langchain
 
 services:
   api:

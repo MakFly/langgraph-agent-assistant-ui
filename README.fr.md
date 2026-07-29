@@ -1,4 +1,4 @@
-# LangGraph POC — agent à outils gratuits
+# LangChain — RAG moderne et agent à outils
 
 > 🇬🇧 **[English version](README.md)** — la version anglaise est le README principal du dépôt.
 

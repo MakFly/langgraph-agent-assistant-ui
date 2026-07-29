@@ -3,7 +3,7 @@
 > Fiche de reprise rédigée le **28-07-2026** par lecture seule du dépôt.
 > Toute affirmation est traçable en `fichier:ligne`. Ce qui n'est pas dans le dépôt est
 > marqué « non déterminé depuis le repo ».
-> Dépôt distant : `https://github.com/MakFly/langgraph-agent-assistant-ui.git` (`git remote -v`).
+> Dépôt distant : `https://github.com/MakFly/langchain.git` (`git remote -v`).
 >
 > **Mise à jour du 28-07-2026 (même jour) — ajout du RBAC natif et du RAG.**
 > Le projet n'est plus « sans auth » : voir la **section 2 bis**, qui décrit les comptes,

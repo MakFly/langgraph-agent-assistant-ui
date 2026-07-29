@@ -1,4 +1,4 @@
-# LangGraph agent with real tools, streamed to assistant-ui
+# LangChain — modern RAG and tool agent
 
 > 🇫🇷 **[Version française](README.fr.md)**
 

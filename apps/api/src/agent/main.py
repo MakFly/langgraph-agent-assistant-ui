@@ -75,7 +75,7 @@ async def lifespan(_: FastAPI):
     await ragdb.disconnect()
 
 
-app = FastAPI(title="LangGraph POC", version="0.1.0", lifespan=lifespan)
+app = FastAPI(title="LangChain", version="0.1.0", lifespan=lifespan)
 
 # Le front dev passe par le proxy Vite (same-origin), donc CORS ne sert que si
 # vous servez le front depuis une autre origine.

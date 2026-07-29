@@ -30,6 +30,9 @@ projet utilise le versionnage sémantique.
 
 ### Modifié
 
+- Le projet, son dépôt public et sa stack Docker Compose portent désormais le
+  nom **LangChain** ; les mentions de LangGraph sont conservées lorsqu'elles
+  désignent le moteur d'orchestration réellement utilisé.
 - L'identité documentaire accepte désormais le même chemin relatif dans plusieurs
   sources grâce à l'unicité `(root, source)`.
 - Les changements de configuration OCR font partie du profil d'indexation et

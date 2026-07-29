@@ -54,7 +54,7 @@ export function AppSidebar({ health }: { health: HealthState }) {
                 viser directement la bonne URL. */}
             <a href={CHAT_BASE}>
               <LogoIcon />
-              <span className="font-medium">LangGraph POC</span>
+              <span className="font-medium">LangChain</span>
             </a>
           </SidebarMenuButton>
         </div>

@@ -1,4 +1,4 @@
-# LangGraph POC — tout passe par docker compose.
+# LangChain — tout passe par docker compose.
 #
 # Les ports sont lus depuis docker-compose.yml pour éviter une seconde source
 # de vérité. Valeurs de repli si le parsing échoue.
