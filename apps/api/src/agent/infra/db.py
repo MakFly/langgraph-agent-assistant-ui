@@ -105,6 +105,35 @@ CREATE TABLE IF NOT EXISTS sessions (
     rotated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- Sources documentaires administrées depuis l'outil. Les fichiers eux-mêmes
+-- vivent dans un volume persistant ; la base conserve le contrat de traitement,
+-- notamment le provider et le modèle OCR choisis pour CETTE source.
+CREATE TABLE IF NOT EXISTS ingestion_sources (
+    id          TEXT PRIMARY KEY,
+    name        TEXT        NOT NULL,
+    kind        TEXT        NOT NULL DEFAULT 'upload',
+    groups      TEXT[]      NOT NULL DEFAULT '{public}',
+    enabled     BOOLEAN     NOT NULL DEFAULT true,
+    ocr         JSONB       NOT NULL DEFAULT '{}'::jsonb,
+    options     JSONB       NOT NULL DEFAULT '{}'::jsonb,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Journal durable : un redémarrage ne transforme pas un traitement en opération
+-- fantôme. Les exécutions interrompues sont remises en file au démarrage.
+CREATE TABLE IF NOT EXISTS ingestion_runs (
+    id          TEXT PRIMARY KEY,
+    source_id   TEXT        NOT NULL REFERENCES ingestion_sources(id) ON DELETE CASCADE,
+    mode        TEXT        NOT NULL DEFAULT 'sync',
+    status      TEXT        NOT NULL DEFAULT 'queued',
+    report      JSONB,
+    error       TEXT,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    started_at  TIMESTAMPTZ,
+    finished_at TIMESTAMPTZ
+);
+
 -- Propriétaire d'une conversation. En ALTER plutôt que dans le CREATE ci-dessus :
 -- la table existe déjà sur les installations en cours, et le CREATE TABLE IF NOT
 -- EXISTS ne l'aurait donc jamais modifiée.
@@ -130,6 +159,12 @@ CREATE INDEX IF NOT EXISTS mcp_servers_created_idx
 CREATE UNIQUE INDEX IF NOT EXISTS sessions_token_idx ON sessions (token_hash);
 CREATE INDEX IF NOT EXISTS sessions_previous_idx ON sessions (previous_hash);
 CREATE INDEX IF NOT EXISTS sessions_user_idx ON sessions (user_id);
+CREATE INDEX IF NOT EXISTS ingestion_sources_updated_idx
+    ON ingestion_sources (updated_at DESC);
+CREATE INDEX IF NOT EXISTS ingestion_runs_source_created_idx
+    ON ingestion_runs (source_id, created_at DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS ingestion_runs_one_active_idx
+    ON ingestion_runs (source_id) WHERE status IN ('queued', 'running');
 """
 
 _pool: asyncpg.Pool | None = None

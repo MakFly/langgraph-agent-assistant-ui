@@ -11,7 +11,7 @@ COMPOSE := docker compose
 .DEFAULT_GOAL := help
 .PHONY: help install up dev down stop restart logs logs-api logs-web test test-unit lint typecheck build check shell-api shell-web clean \
         user-create user-list user-groups user-password user-role user-disable user-delete \
-        seed demo ingest ingest-dry rag-stats rag-reset eval
+        seed demo ingest ingest-dry rag-stats rag-reset eval ablation calibrate corpus inbox inbox-eval
 
 help: ## Affiche cette aide
 	@grep -hE '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -125,8 +125,33 @@ rag-stats: ## Documents et fragments indexés, par groupe
 rag-reset: ## Vide l'index documentaire (les conversations ne bougent pas)
 	$(COMPOSE) run --rm api python -m agent.cli rag reset
 
-eval: ## Mesure le RAG : rappel@k, MRR et contrôle de fuite d'ACL
+eval: ## Mesure le RAG : rappel@k, MRR, abstention et fuites d'ACL
 	$(COMPOSE) run --rm api python -m agent.cli rag eval
+
+ablation: ## Compare les techniques de recherche une par une (appelle un LLM — long)
+	$(COMPOSE) run --rm api python -m agent.cli rag eval --ablation
+
+calibrate: ## Déduit le seuil d'abstention d'un critère écrit, au lieu de le choisir
+	$(COMPOSE) run --rm api python -m agent.cli rag eval --calibrate
+
+# --- Corpus et boîte de démonstration -----------------------------------------
+# Générés, pas écrits à la main : un corpus de quatre documents ne permet de
+# mesurer strictement rien. Tout est déterministe (graine dans corpus-gen/), donc
+# deux générations produisent les mêmes octets et deux mesures restent comparables.
+# Nécessite python3 sur l'hôte — aucune dépendance hors bibliothèque standard.
+
+corpus: ## Régénère corpus/, eval/questions.yaml et mailbox/ (déterministe)
+	python3 corpus-gen/generate.py --out corpus --eval eval/questions.yaml
+	python3 corpus-gen/mailbox.py --out mailbox
+	@echo "→ relancez 'make ingest' pour réindexer"
+
+# --- Verticale courtage : courriel → dossier ----------------------------------
+
+inbox: ## Traite mailbox/ en dossiers préparés (file de travail)
+	$(COMPOSE) run --rm api python -m agent.cli inbox run --detail
+
+inbox-eval: ## Mesure le traitement sur 5 exécutions (moyenne + étendue)
+	$(COMPOSE) run --rm api python -m agent.cli inbox run --measure --repeat 5
 
 # --- Divers ------------------------------------------------------------------
 

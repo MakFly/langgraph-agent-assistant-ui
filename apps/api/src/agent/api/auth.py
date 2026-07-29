@@ -51,12 +51,12 @@ def _bearer(request: Request) -> str | None:
 
 
 def _user_from_claims(claims: dict) -> User | None:
-    """Reconstruit l'utilisateur depuis le jeton, sans requête SQL.
+    """Reconstruit l'utilisateur depuis le jeton pour le repli sans base.
 
-    Le rôle et les groupes sont pris tels qu'ils étaient à l'émission : c'est la
-    contrepartie assumée du jeton auto-porteur (cf. `agent.infra.auth`). Un rôle
-    inconnu est ramené à `member` plutôt que rejeté — dégrader les droits est
-    toujours le repli sûr.
+    En fonctionnement nominal, `optional_user()` recharge le compte : un JWT
+    valide dont le sujet a été supprimé ne doit pas survivre jusqu'à une
+    violation de clé étrangère. Ce repli préserve seulement le mode dégradé
+    historique quand Postgres est momentanément indisponible.
     """
     subject = claims.get("sub")
     if not subject:
@@ -78,7 +78,21 @@ async def optional_user(request: Request) -> User | None:
     if not token:
         return None
     claims = auth.decode_token(token)
-    return _user_from_claims(claims) if claims else None
+    claimed = _user_from_claims(claims) if claims else None
+    if claimed is None:
+        return None
+
+    try:
+        current = await users.get_user(claimed.id)
+    except Exception as error:  # noqa: BLE001 - dépendance « ne lève jamais »
+        # Disponibilité assumée : un incident Postgres ne coupe pas un chat déjà
+        # authentifié. Les ACL restent celles signées dans le jeton et le RAG a
+        # sa propre base. Dès que Postgres revient, le compte est revérifié.
+        logger.warning("validation du compte impossible, repli sur le JWT : %s", error)
+        return claimed
+
+    # Compte supprimé/recréé ou désactivé : le JWT signé n'autorise plus rien.
+    return None if current is None or current.disabled else current
 
 
 async def current_user(request: Request) -> User:
@@ -112,9 +126,9 @@ def _cookie_secure() -> bool:
 def _issue_access(response: Response, user: User) -> None:
     """Signe un jeton d'accès pour `user` et le pose en cookie.
 
-    Le jeton est auto-porteur : il fige `role` et `groups` tels qu'ils sont
-    maintenant. C'est pourquoi le refresh recharge l'utilisateur depuis la base —
-    un compte dont les droits ont changé les récupère au prochain refresh."""
+    Le jeton reste auto-porteur pour le mode dégradé, mais les requêtes nominales
+    rechargent le compte : suppression, désactivation et changements de droits
+    prennent donc effet sans attendre son expiration."""
     token = auth.encode_token(
         {
             "sub": user.id,

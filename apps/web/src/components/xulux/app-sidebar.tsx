@@ -20,6 +20,7 @@ import { resolveToolMeta } from "@/lib/tool-metadata"
 // Icône et libellé viennent du registre partagé ; ici on ne fixe que la liste
 // et l'ordre des outils affichés dans la sidebar.
 const TOOL_NAMES = [
+  "document_search",
   "wikipedia_search",
   "hacker_news_search",
   "weather_forecast",

@@ -106,3 +106,66 @@ export type McpServerInput = {
   env?: Record<string, string>
   enabled?: boolean
 }
+
+export type OcrSettings = {
+  enabled: boolean
+  provider: ProviderId
+  model: string
+  prompt: string
+  max_pages: number
+  dpi: number
+}
+
+export type IngestionOptions = {
+  max_chunks: number
+  prune: boolean
+  force_prune: boolean
+}
+
+export type IngestionSource = {
+  id: string
+  name: string
+  kind: "upload"
+  groups: string[]
+  enabled: boolean
+  ocr: OcrSettings
+  options: IngestionOptions
+  created_at: string
+  updated_at: string
+}
+
+export type IngestionFile = {
+  name: string
+  group: string
+  size: number
+  updated_at: number
+}
+
+export type IngestionReport = {
+  dry_run: boolean
+  indexed: number
+  unchanged: number
+  removed: number
+  failed: number
+  chunks: number
+  tokens: number
+}
+
+export type IngestionRun = {
+  id: string
+  source_id: string
+  mode: "dry_run" | "sync"
+  status: "queued" | "running" | "succeeded" | "failed"
+  report: IngestionReport | null
+  error: string | null
+  created_at: string
+  started_at: string | null
+  finished_at: string | null
+}
+
+export type IngestionState = {
+  sources: IngestionSource[]
+  providers: ProviderInfo[]
+  supported_extensions: string[]
+  max_file_bytes: number
+}

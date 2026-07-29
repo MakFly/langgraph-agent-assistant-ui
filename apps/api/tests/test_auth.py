@@ -158,6 +158,17 @@ async def test_jeton_forge_rejete():
             assert response.status_code == 401, token
 
 
+async def test_jeton_d_un_compte_supprime_ne_produit_pas_un_500(session):
+    client, user = await session("orphelin")
+    await db.pool().execute("DELETE FROM users WHERE id = $1", user.id)
+
+    assert (await client.get("/api/auth/me")).status_code == 401
+    thread = await client.post(
+        "/api/threads", json={"id": "jamais-cree", "scope": SCOPE}
+    )
+    assert thread.status_code == 401
+
+
 # --- Refresh & sessions -------------------------------------------------------
 
 

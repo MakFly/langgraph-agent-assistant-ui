@@ -41,6 +41,7 @@ from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
 from agent.core import settings, users
 from agent.core.callbacks import RunMetricsHandler
 from agent.core.graph import get_graph
+from agent.core.rag.llm import INTERNAL_STREAM_TAG
 from agent.core.users import User
 from agent.protocol.messages import to_lc_messages
 
@@ -199,8 +200,15 @@ async def ui_message_stream(
             config={"callbacks": [RunMetricsHandler()], "configurable": identity},
         ):
             if mode == "messages":
-                chunk, _metadata = payload
+                chunk, metadata = payload
                 if not isinstance(chunk, AIMessageChunk):
+                    continue
+                # Les LLM internes au RAG (HyDE, reformulation, reranking) sont
+                # des détails d'implémentation. LangGraph peut remonter leurs
+                # chunks imbriqués dans `stream_mode="messages"` : les exposer
+                # montrerait une hypothèse potentiellement fausse et le JSON de
+                # notation avant la vraie réponse.
+                if INTERNAL_STREAM_TAG in (metadata.get("tags") or []):
                     continue
 
                 # Fragments d'arguments d'outil : purement cosmétique (l'UI affiche

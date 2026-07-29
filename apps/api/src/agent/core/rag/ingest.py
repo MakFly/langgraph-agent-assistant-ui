@@ -23,18 +23,25 @@ et rien n'a encore été facturé.
 from __future__ import annotations
 
 import hashlib
+import json
 import logging
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from agent.core.rag import chunk as chunker
+from agent.core.rag import config as ragconfig
 from agent.core.rag import embed, parse
 from agent.infra import ragdb
 
 logger = logging.getLogger("agent.rag.ingest")
 
 DEFAULT_MAX_CHUNKS = 2000
+
+# Longueur maximale du préfixe contextuel. Un préfixe qui pèse autant que le
+# fragment noie son sens dans le vecteur : on retrouverait alors tous les
+# fragments d'un même document sur la seule foi de leur en-tête commun.
+MAX_CONTEXT_CHARS = 220
 
 # Groupe attribué à un fichier déposé à la racine du corpus, hors de tout dossier.
 FALLBACK_GROUP = "public"
@@ -105,7 +112,51 @@ class _Pending:
     title: str | None
     sha256: str
     groups: list[str]
-    chunks: list[str]
+    chunks: list[chunker.Chunk]
+    meta: dict
+    contexts: list[str]
+    """Préfixe réellement vectorisé avec chaque fragment. Vide si l'indexation
+    contextuelle est désactivée — et alors `chunks[i]` est vectorisé seul."""
+
+
+def build_context(meta: dict, title: str | None, fragment: chunker.Chunk) -> str:
+    """Préfixe situant un fragment dans son document.
+
+    **Contextualisation structurelle, pas générée.** L'approche popularisée par
+    Anthropic fait rédiger ce préfixe par un LLM, fragment par fragment : c'est
+    plus riche, et c'est un appel de modèle par fragment à chaque ingestion —
+    donc un coût qui croît avec le corpus et se repaie à chaque réindexation.
+    Ici le préfixe est assemblé à partir de ce qu'on sait déjà : le front-matter
+    et le chemin de titres. C'est gratuit, déterministe, et ça règle le problème
+    qui compte — « la franchise est portée à 12 500 € » ne dit ni de quel client
+    ni de quel contrat il s'agit, et devient donc introuvable par ces termes.
+
+    Le gain reste à MESURER, pas à supposer : c'est ce que fait la comparaison
+    de deux index (cf. `rag eval --ablation`, section indexation).
+    """
+    morceaux: list[str] = []
+
+    libelle = meta.get("type")
+    if libelle:
+        morceaux.append(str(libelle).replace("_", " "))
+    for cle in ("client_nom", "prospect"):
+        if meta.get(cle):
+            morceaux.append(str(meta[cle]))
+            break
+    for cle in ("reference", "contrat"):
+        if meta.get(cle):
+            morceaux.append(str(meta[cle]))
+            break
+    if meta.get("produit_label"):
+        morceaux.append(str(meta["produit_label"]))
+
+    entete = " — ".join(dict.fromkeys(morceaux))
+    chemin = fragment.heading_path or (title or "")
+
+    contexte = " · ".join(part for part in (entete, chemin) if part)
+    if len(contexte) > MAX_CONTEXT_CHARS:
+        contexte = contexte[:MAX_CONTEXT_CHARS].rsplit(" ", 1)[0] + "…"
+    return contexte
 
 
 def max_chunks_per_run() -> int:
@@ -154,7 +205,8 @@ async def _existing(connection, root: str) -> dict[str, dict]:
     reste de l'index comme supprimé.
     """
     rows = await connection.fetch(
-        "SELECT id, source, sha256, embed_model, embed_dim FROM rag_documents WHERE root = $1",
+        "SELECT id, source, sha256, embed_model, embed_dim, index_profile "
+        "FROM rag_documents WHERE root = $1",
         root,
     )
     return {row["source"]: dict(row) for row in rows}
@@ -167,6 +219,7 @@ async def ingest(
     max_chunks: int | None = None,
     prune: bool = True,
     force: bool = False,
+    ocr_config: dict | None = None,
 ) -> IngestReport:
     """Synchronise l'index sur `root`, en ne payant que ce qui a changé.
 
@@ -186,6 +239,16 @@ async def ingest(
     report = IngestReport(dry_run=dry_run)
     cap = max_chunks if max_chunks is not None else max_chunks_per_run()
     model, dim = embed.model_name(), embed.dimension()
+    reglages = ragconfig.from_env()
+    profil = reglages.index_profile()
+    if ocr_config:
+        # Modifier le modèle/prompt OCR doit invalider les documents, même si le
+        # fichier source n'a pas changé. Seule l'empreinte entre dans le profil :
+        # le prompt complet n'a rien à faire dans l'index documentaire.
+        ocr_signature = hashlib.sha256(
+            json.dumps(ocr_config, sort_keys=True, ensure_ascii=False).encode()
+        ).hexdigest()[:12]
+        profil = f"{profil};ocr={ocr_signature}"
 
     if not root.is_dir():
         raise FileNotFoundError(f"Corpus introuvable : {root}")
@@ -214,33 +277,54 @@ async def ingest(
             continue
 
         previous = known.get(source)
-        # Le modèle et la dimension font partie de l'identité de l'index : un
-        # document inchangé mais vectorisé par un autre modèle doit être refait.
+        # Le modèle, la dimension ET le profil d'indexation font partie de
+        # l'identité de l'index : un document inchangé mais vectorisé autrement
+        # doit être refait, sinon deux façons de découper et de contextualiser
+        # cohabitent dans le même espace vectoriel sans que rien ne le signale.
         if (
             previous
             and previous["sha256"] == digest
             and previous["embed_model"] == model
             and previous["embed_dim"] == dim
+            and previous["index_profile"] == profil
         ):
             report.documents.append(DocumentReport(source, "inchangé", groups=groups))
             continue
 
         try:
-            text, title = parse.read_document(path)
+            document = await parse.read_document_async(path, ocr_config)
         except parse.ParseError as error:
             report.documents.append(DocumentReport(source, "erreur", message=str(error)))
             continue
 
-        fragments = chunker.chunk_text(text)
+        fragments = chunker.chunk_document(
+            document.text,
+            max_tokens=reglages.chunk_tokens,
+            overlap_paragraphs=reglages.chunk_overlap,
+        )
         if not fragments:
             report.documents.append(
                 DocumentReport(source, "erreur", message="aucun fragment produit")
             )
             continue
 
+        contexts = (
+            [build_context(document.meta, document.title, fragment) for fragment in fragments]
+            if reglages.contextual
+            else [""] * len(fragments)
+        )
+
         pending.append(
             _Pending(
-                _document_id(scope, source), scope, source, title, digest, groups, fragments
+                _document_id(scope, source),
+                scope,
+                source,
+                document.title,
+                digest,
+                groups,
+                fragments,
+                document.meta,
+                contexts,
             )
         )
         report.documents.append(
@@ -248,7 +332,12 @@ async def ingest(
         )
 
     total_chunks = sum(len(item.chunks) for item in pending)
-    report.tokens = embed.estimate([text for item in pending for text in item.chunks])
+    # Le décompte porte sur ce qui part RÉELLEMENT au fournisseur, préfixe compris :
+    # l'indexation contextuelle est facturée, et l'annoncer après coup serait une
+    # mauvaise surprise sur un gros corpus.
+    report.tokens = embed.estimate(
+        [texte for item in pending for texte in _to_embed(item)]
+    )
 
     # Le plafond s'applique ici : le découpage est gratuit, la vectorisation non.
     if total_chunks > cap:
@@ -282,8 +371,8 @@ async def ingest(
         return report
 
     for item in pending:
-        vectors = await embed.embed_documents(item.chunks)
-        await _write(item, vectors, model, dim)
+        vectors = await embed.embed_documents(_to_embed(item))
+        await _write(item, vectors, model, dim, profil)
 
     if obsolete:
         async with ragdb.pool().acquire() as connection:
@@ -306,20 +395,47 @@ async def ingest(
     return report
 
 
-async def _write(item: _Pending, vectors: list[list[float]], model: str, dim: int) -> None:
+def _to_embed(item: _Pending) -> list[str]:
+    """Ce qui part réellement au vectoriseur : le fragment, précédé de son contexte.
+
+    Le contexte est joint au texte pour la SEULE vectorisation. Ce qui est stocké
+    dans `rag_chunks.text`, et donc ce qui sera cité à l'utilisateur, reste le
+    fragment d'origine — un extrait servi avec son en-tête technique collé devant
+    serait illisible dans une réponse.
+    """
+    return [
+        f"{contexte}\n\n{fragment.text}" if contexte else fragment.text
+        for fragment, contexte in zip(item.chunks, item.contexts, strict=True)
+    ]
+
+
+async def _write(
+    item: _Pending,
+    vectors: list[list[float]],
+    model: str,
+    dim: int,
+    profil: str,
+) -> None:
     """Remplace un document et ses fragments, en une transaction.
 
     Suppression puis réinsertion plutôt que mise à jour fragment par fragment :
     un document réécrit n'a pas le même nombre de fragments, et une réécriture
     partielle laisserait la queue de l'ancienne version dans l'index.
     """
+    # Les métadonnées du document sont recopiées sur chaque fragment. C'est de la
+    # dénormalisation assumée : le filtrage métier s'applique dans la MÊME requête
+    # que la recherche vectorielle, et une jointure sur `rag_documents` empêcherait
+    # l'index HNSW de servir — la recherche deviendrait un parcours complet.
+    meta_json = json.dumps(item.meta, ensure_ascii=False)
+
     async with ragdb.pool().acquire() as connection, connection.transaction():
         await connection.execute("DELETE FROM rag_documents WHERE id = $1", item.id)
         await connection.execute(
             """
             INSERT INTO rag_documents
-                (id, root, source, title, sha256, acl, embed_model, embed_dim, chunk_count)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+                (id, root, source, title, sha256, acl, embed_model, embed_dim,
+                 chunk_count, meta, index_profile)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, $11)
             """,
             item.id,
             item.root,
@@ -330,14 +446,26 @@ async def _write(item: _Pending, vectors: list[list[float]], model: str, dim: in
             model,
             dim,
             len(item.chunks),
+            meta_json,
+            profil,
         )
         await connection.executemany(
             """
-            INSERT INTO rag_chunks (document_id, ord, text, acl, embedding)
-            VALUES ($1, $2, $3, $4, $5::vector)
+            INSERT INTO rag_chunks (document_id, ord, text, acl, embedding, meta, context)
+            VALUES ($1, $2, $3, $4, $5::vector, $6::jsonb, $7)
             """,
             [
-                (item.id, index, text, item.groups, ragdb.to_vector_literal(vector))
-                for index, (text, vector) in enumerate(zip(item.chunks, vectors, strict=True))
+                (
+                    item.id,
+                    index,
+                    fragment.text,
+                    item.groups,
+                    ragdb.to_vector_literal(vector),
+                    meta_json,
+                    contexte,
+                )
+                for index, (fragment, vector, contexte) in enumerate(
+                    zip(item.chunks, vectors, item.contexts, strict=True)
+                )
             ],
         )

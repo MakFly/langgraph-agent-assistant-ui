@@ -14,7 +14,7 @@ from typing import Any
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, ToolMessage
 from langchain_core.messages.utils import count_tokens_approximately
 
-from agent.core.graph import MAX_CONTEXT_TOKENS, _windowed, build_graph
+from agent.core.graph import MAX_CONTEXT_TOKENS, _windowed, build_graph, system_prompt
 from agent.protocol.stream import ui_message_stream
 from tests.fakes import FakeToolCallingModel, tool_call
 
@@ -35,6 +35,16 @@ async def collect(model: FakeToolCallingModel, messages: list[dict]) -> list[dic
 
 def types_of(chunks: list[dict]) -> list[str]:
     return [chunk["type"] for chunk in chunks]
+
+
+def test_le_prompt_route_les_questions_metier_vers_les_documents_internes():
+    prompt = str(system_prompt().content)
+
+    assert "courtage ou d'assurance" in prompt
+    assert "`document_search` EN PREMIER" in prompt
+    assert "Ne remplace jamais `document_search` par Wikipédia" in prompt
+    assert "ne spécule pas" in prompt
+    assert "n'invente jamais de lien ni d'URL" in prompt
 
 
 async def test_appelle_un_outil_puis_repond():
